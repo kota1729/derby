@@ -25,8 +25,7 @@ body {
 }
 
 body {
-    background:
-        radial-gradient(ellipse at top, #163826 0%, var(--bg) 55%, #08130d 100%);
+    background: radial-gradient(ellipse at top, #163826 0%, var(--bg) 55%, #08130d 100%);
     color: var(--parchment);
     font-family: 'Shippori Mincho', serif;
     min-height: 100vh;
@@ -34,7 +33,7 @@ body {
 }
 
 .wrap {
-    max-width: 1080px;
+    max-width: 1180px;
     margin: 0 auto;
 }
 
@@ -75,7 +74,7 @@ body {
 .banner .sub {
     font-family: 'Oswald', sans-serif;
     font-size: 11px;
-    letter-spacing: .3em;
+    letter-spacing: .2em;
     color: var(--parchment-dim);
     margin-top: 4px;
 }
@@ -83,7 +82,7 @@ body {
 .ticker {
     font-family: 'Oswald', sans-serif;
     font-size: 12px;
-    letter-spacing: .08em;
+    letter-spacing: .06em;
     color: #9fd6b0;
     overflow: hidden;
     white-space: nowrap;
@@ -96,7 +95,7 @@ body {
 .ticker span {
     display: inline-block;
     padding-left: 100%;
-    animation: ticker 16s linear infinite;
+    animation: ticker 20s linear infinite;
 }
 
 @keyframes ticker {
@@ -131,7 +130,6 @@ body {
     font-size: 28px;
     color: var(--board-digit);
     letter-spacing: .03em;
-    transition: transform .25s;
 }
 
 .balance-box .amount.flip {
@@ -162,13 +160,14 @@ body {
 .section-title {
     font-family: 'Oswald', sans-serif;
     font-weight: 600;
-    letter-spacing: .2em;
+    letter-spacing: .18em;
     font-size: 13px;
     color: var(--brass);
     margin: 34px 0 14px;
     display: flex;
     align-items: center;
     gap: 10px;
+    flex-wrap: wrap;
 }
 
 .section-title::after {
@@ -181,24 +180,123 @@ body {
 .race-no {
     font-family: 'Roboto Mono', monospace;
     color: var(--parchment-dim);
+    font-size: 11px;
+    letter-spacing: 0;
+}
+
+/* ---------- Race tabs (番組表) ---------- */
+.race-tabs {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding-bottom: 6px;
+}
+
+.race-tab {
+    flex: 0 0 auto;
+    background: linear-gradient(180deg, #18140e, #100d09);
+    border: 1px solid rgba(201, 162, 39, .35);
+    border-radius: 6px;
+    padding: 8px 12px;
+    cursor: pointer;
+    min-width: 84px;
+    text-align: center;
+    transition: border-color .15s, transform .1s;
+}
+
+.race-tab:hover {
+    border-color: var(--brass);
+}
+
+.race-tab.active {
+    border-color: var(--brass-bright);
+    background: linear-gradient(180deg, #2a2313, #171207);
+    box-shadow: 0 0 0 1px var(--brass-bright);
+}
+
+.race-tab .rno {
+    font-family: 'Oswald', sans-serif;
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--parchment);
+}
+
+.race-tab .rtime {
+    font-family: 'Roboto Mono', monospace;
+    font-size: 10px;
+    color: var(--parchment-dim);
+    margin-top: 2px;
+}
+
+.race-tab .rstatus {
+    font-family: 'Oswald', sans-serif;
+    font-size: 9px;
+    letter-spacing: .1em;
+    margin-top: 4px;
+    padding: 1px 6px;
+    border-radius: 8px;
+    display: inline-block;
+}
+
+.rstatus.open {
+    background: rgba(63, 174, 106, .18);
+    color: #8fd39c;
+}
+
+.rstatus.running {
+    background: rgba(201, 162, 39, .2);
+    color: var(--brass-bright);
+}
+
+.rstatus.finished {
+    background: rgba(124, 37, 48, .2);
+    color: #e2a9af;
+}
+
+/* ---------- Race info bar ---------- */
+.race-info {
+    background: linear-gradient(180deg, #12261a, #0c1b12);
+    border: 1px solid rgba(201, 162, 39, .35);
+    border-radius: 6px;
+    padding: 12px 18px;
+    margin-top: 12px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 22px;
+    align-items: baseline;
+}
+
+.race-info .rname {
+    font-family: 'Oswald', sans-serif;
+    font-weight: 600;
+    font-size: 17px;
+    color: var(--brass-bright);
+    letter-spacing: .04em;
+}
+
+.race-info .rmeta {
+    font-family: 'Roboto Mono', monospace;
     font-size: 12px;
+    color: var(--parchment-dim);
 }
 
 /* ---------- Track ---------- */
 .track {
-    background:
-        linear-gradient(180deg, var(--turf) 0%, #102a1c 100%);
+    background: linear-gradient(180deg, var(--turf) 0%, #102a1c 100%);
     border: 1px solid var(--turf-line);
     border-radius: 8px;
     padding: 14px 0;
     box-shadow: inset 0 0 40px rgba(0, 0, 0, .4), var(--shadow);
     position: relative;
+    margin-top: 14px;
+    max-height: 460px;
+    overflow-y: auto;
 }
 
 .lane {
     position: relative;
-    height: 46px;
-    margin: 2px 0;
+    height: 38px;
+    margin: 1px 0;
     border-bottom: 1px dashed rgba(241, 231, 208, .12);
     display: flex;
     align-items: center;
@@ -209,11 +307,11 @@ body {
 }
 
 .lane-num {
-    width: 34px;
-    flex: 0 0 34px;
+    width: 30px;
+    flex: 0 0 30px;
     text-align: center;
     font-family: 'Roboto Mono', monospace;
-    font-size: 12px;
+    font-size: 11px;
     color: var(--parchment-dim);
     border-right: 1px solid rgba(241, 231, 208, .15);
     height: 100%;
@@ -226,12 +324,12 @@ body {
     position: relative;
     flex: 1;
     height: 100%;
-    margin-right: 64px;
+    margin-right: 58px;
 }
 
 .finish-line {
     position: absolute;
-    right: -64px;
+    right: -58px;
     top: 0;
     bottom: 0;
     width: 6px;
@@ -241,8 +339,8 @@ body {
 
 .finish-label {
     position: absolute;
-    right: -58px;
-    top: -14px;
+    right: -52px;
+    top: -13px;
     font-family: 'Oswald', sans-serif;
     font-size: 9px;
     letter-spacing: .15em;
@@ -256,16 +354,35 @@ body {
     transform: translate(0, -50%);
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 5px;
     transition: left .12s linear;
     will-change: left;
 }
 
 .horse .silhouette {
-    width: 46px;
-    height: 28px;
+    width: 38px;
+    height: 23px;
     display: block;
     overflow: visible;
+}
+
+.horse .tag {
+    font-family: 'Roboto Mono', monospace;
+    font-size: 9px;
+    color: var(--ink);
+    background: var(--parchment);
+    padding: 1px 4px;
+    border-radius: 3px;
+    white-space: nowrap;
+    opacity: .9;
+}
+
+.horse.winner .tag {
+    background: var(--brass-bright);
+}
+
+.horse.finished {
+    opacity: .55;
 }
 
 /* ---------- Galloping animation ---------- */
@@ -375,14 +492,13 @@ body {
     }
 }
 
-/* 走行中に足元へ流れる砂煙 */
 .horse.running::before {
     content: "";
     position: absolute;
     left: -10px;
     top: 68%;
-    width: 16px;
-    height: 8px;
+    width: 14px;
+    height: 7px;
     border-radius: 50%;
     background: radial-gradient(circle, rgba(230, 210, 170, .55) 0%, rgba(230, 210, 170, 0) 72%);
     animation: dustPuff var(--leg-dur, .5s) infinite ease-out;
@@ -400,139 +516,383 @@ body {
     }
 
     100% {
-        transform: translate(-24px, 5px) scale(1.5);
+        transform: translate(-22px, 5px) scale(1.5);
         opacity: 0;
     }
 }
 
-.horse .tag {
-    font-family: 'Roboto Mono', monospace;
-    font-size: 10px;
-    color: var(--ink);
-    background: var(--parchment);
-    padding: 1px 5px;
-    border-radius: 3px;
-    white-space: nowrap;
-    opacity: .9;
-}
-
-.horse.winner .tag {
-    background: var(--brass-bright);
-}
-
-.horse.finished {
-    opacity: .55;
-}
-
-/* ---------- Betting grid ---------- */
-.bet-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
-    gap: 12px;
-}
-
-.horse-card {
-    background: linear-gradient(180deg, #18140e, #100d09);
-    border: 1px solid rgba(201, 162, 39, .35);
-    border-radius: 6px;
-    padding: 14px 16px;
-    cursor: pointer;
-    transition: border-color .2s, transform .15s, background .2s;
-    position: relative;
-}
-
-.horse-card:hover {
-    border-color: var(--brass);
-    transform: translateY(-2px);
-}
-
-.horse-card.selected {
-    border-color: var(--brass-bright);
-    background: linear-gradient(180deg, #2a2313, #171207);
-    box-shadow: 0 0 0 1px var(--brass-bright);
-}
-
-.horse-card .row1 {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-
-.horse-card .name {
-    font-family: 'Oswald', sans-serif;
-    font-weight: 600;
-    font-size: 15px;
-    color: var(--parchment);
+/* ---------- Race controls ---------- */
+.race-controls {
+    margin-top: 14px;
     display: flex;
     align-items: center;
-    gap: 8px;
-}
-
-.horse-card .dot {
-    width: 11px;
-    height: 11px;
-    border-radius: 50%;
-    display: inline-block;
-    box-shadow: 0 0 0 2px rgba(241, 231, 208, .25);
-}
-
-.horse-card .odds {
-    font-family: 'Roboto Mono', monospace;
-    font-weight: 700;
-    font-size: 20px;
-    color: var(--brass-bright);
-    transition: transform .4s;
-}
-
-.horse-card .odds.flip {
-    animation: flipnum .5s ease;
-}
-
-.horse-card .odds-suffix {
-    font-size: 11px;
-    color: var(--parchment-dim);
-    margin-left: 2px;
-}
-
-.horse-card .meta {
-    font-family: 'Oswald', sans-serif;
-    font-size: 10px;
-    letter-spacing: .12em;
-    color: var(--parchment-dim);
-    margin-top: 6px;
-}
-
-/* ---------- Controls ---------- */
-.controls {
-    margin-top: 20px;
-    background: linear-gradient(180deg, #12261a, #0c1b12);
-    border: 1px solid rgba(201, 162, 39, .35);
-    border-radius: 6px;
-    padding: 18px 20px;
-    display: flex;
-    align-items: flex-end;
     gap: 16px;
     flex-wrap: wrap;
 }
 
-.field {
+.race-status-msg {
+    font-family: 'Oswald', sans-serif;
+    font-size: 12px;
+    letter-spacing: .05em;
+    color: var(--parchment-dim);
+}
+
+button.primary {
+    font-family: 'Oswald', sans-serif;
+    letter-spacing: .12em;
+    font-weight: 600;
+    font-size: 13px;
+    background: var(--maroon);
+    color: var(--parchment);
+    border: 1px solid #a13341;
+    padding: 11px 22px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: transform .12s, background .2s;
+    white-space: nowrap;
+}
+
+button.primary:hover:not(:disabled) {
+    background: #932c39;
+    transform: translateY(-1px);
+}
+
+button.primary:disabled {
+    opacity: .35;
+    cursor: not-allowed;
+}
+
+button.ghost {
+    font-family: 'Oswald', sans-serif;
+    letter-spacing: .1em;
+    font-size: 12px;
+    background: transparent;
+    color: var(--parchment-dim);
+    border: 1px solid rgba(241, 231, 208, .3);
+    padding: 10px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+button.ghost:hover:not(:disabled) {
+    color: var(--parchment);
+    border-color: var(--parchment);
+}
+
+button.ghost:disabled {
+    opacity: .3;
+    cursor: not-allowed;
+}
+
+/* ---------- Result banner (message) ---------- */
+.result-banner {
+    margin-top: 14px;
+    padding: 12px 16px;
+    border-radius: 6px;
+    font-family: 'Oswald', sans-serif;
+    letter-spacing: .04em;
+    font-size: 13px;
+    display: none;
+}
+
+.result-banner.show {
+    display: block;
+    animation: fadein .35s ease;
+}
+
+.result-banner.win {
+    background: rgba(201, 162, 39, .15);
+    border: 1px solid var(--brass-bright);
+    color: var(--brass-bright);
+}
+
+.result-banner.lose {
+    background: rgba(124, 37, 48, .2);
+    border: 1px solid var(--maroon);
+    color: #e2a9af;
+}
+
+.result-banner.info {
+    background: rgba(74, 111, 227, .15);
+    border: 1px solid #4a6fe3;
+    color: #b7c6f7;
+}
+
+@keyframes fadein {
+    from {
+        opacity: 0;
+        transform: translateY(-4px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* ---------- Result panel (着順+払戻金) ---------- */
+.result-panel {
+    margin-top: 18px;
+    background: linear-gradient(180deg, #12261a, #0c1b12);
+    border: 1px solid var(--brass);
+    border-radius: 6px;
+    padding: 16px 18px;
+}
+
+.result-panel h3 {
+    font-family: 'Oswald', sans-serif;
+    letter-spacing: .12em;
+    font-size: 13px;
+    color: var(--brass-bright);
+    margin: 0 0 10px;
+}
+
+.result-panel h3:not(:first-child) {
+    margin-top: 18px;
+}
+
+.finish-table,
+.payout-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: 'Roboto Mono', monospace;
+    font-size: 12px;
+}
+
+.finish-table th,
+.payout-table th {
+    text-align: left;
+    font-family: 'Oswald', sans-serif;
+    letter-spacing: .1em;
+    font-size: 10px;
+    color: var(--parchment-dim);
+    border-bottom: 1px solid rgba(201, 162, 39, .4);
+    padding: 6px 8px;
+}
+
+.finish-table td,
+.payout-table td {
+    padding: 6px 8px;
+    border-bottom: 1px solid rgba(241, 231, 208, .08);
+    color: var(--parchment);
+}
+
+.finish-table td.pos1 {
+    color: var(--brass-bright);
+    font-weight: 700;
+}
+
+/* ---------- Entry table (出馬表) ---------- */
+.entry-table-wrap {
+    overflow-x: auto;
+    background: linear-gradient(180deg, #12261a, #0c1b12);
+    border: 1px solid rgba(201, 162, 39, .3);
+    border-radius: 6px;
+}
+
+.entry-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: 'Roboto Mono', monospace;
+    font-size: 12px;
+    min-width: 720px;
+}
+
+.entry-table th {
+    text-align: left;
+    font-family: 'Oswald', sans-serif;
+    letter-spacing: .08em;
+    font-size: 10px;
+    color: var(--parchment-dim);
+    border-bottom: 1px solid rgba(201, 162, 39, .4);
+    padding: 8px 8px;
+    position: sticky;
+    top: 0;
+    background: #12261a;
+}
+
+.entry-table td {
+    padding: 7px 8px;
+    border-bottom: 1px solid rgba(241, 231, 208, .07);
+    color: var(--parchment);
+    white-space: nowrap;
+}
+
+.entry-table tbody tr {
+    cursor: pointer;
+    transition: background .12s;
+}
+
+.entry-table tbody tr:hover {
+    background: rgba(201, 162, 39, .08);
+}
+
+.entry-table tbody tr.selected {
+    background: rgba(230, 195, 79, .16);
+    box-shadow: inset 2px 0 0 var(--brass-bright);
+}
+
+.entry-table tbody tr.scratched {
+    opacity: .35;
+    cursor: not-allowed;
+}
+
+.waku {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border-radius: 4px;
+    font-family: 'Oswald', sans-serif;
+    font-size: 11px;
+    font-weight: 700;
+    color: #171310;
+    border: 1px solid rgba(0, 0, 0, .3);
+}
+
+.horse-name-cell {
+    font-family: 'Shippori Mincho', serif;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--parchment);
+}
+
+.pop-badge {
+    display: inline-block;
+    min-width: 18px;
+    text-align: center;
+    padding: 1px 5px;
+    border-radius: 10px;
+    font-size: 10px;
+    background: rgba(241, 231, 208, .1);
+    color: var(--parchment-dim);
+}
+
+.pop-badge.fav1 {
+    background: var(--brass-bright);
+    color: #171310;
+    font-weight: 700;
+}
+
+.pop-badge.fav2 {
+    background: rgba(230, 195, 79, .35);
+    color: var(--brass-bright);
+}
+
+/* ---------- Bet type tabs ---------- */
+.bet-type-tabs {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.bet-type-tab {
+    font-family: 'Oswald', sans-serif;
+    letter-spacing: .08em;
+    font-size: 12px;
+    background: linear-gradient(180deg, #18140e, #100d09);
+    border: 1px solid rgba(201, 162, 39, .35);
+    color: var(--parchment-dim);
+    padding: 9px 16px;
+    border-radius: 20px;
+    cursor: pointer;
+    transition: .15s;
+}
+
+.bet-type-tab:hover {
+    border-color: var(--brass);
+    color: var(--parchment);
+}
+
+.bet-type-tab.active {
+    background: var(--maroon);
+    border-color: #a13341;
+    color: var(--parchment);
+}
+
+/* ---------- Bet slip ---------- */
+.bet-slip {
+    margin-top: 14px;
+    background: linear-gradient(180deg, #12261a, #0c1b12);
+    border: 1px solid rgba(201, 162, 39, .35);
+    border-radius: 6px;
+    padding: 16px 18px;
+    display: flex;
+    align-items: flex-end;
+    gap: 18px;
+    flex-wrap: wrap;
+}
+
+.bet-slip .slip-picks {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.pick-slot {
+    min-width: 60px;
+    min-height: 40px;
+    border: 1px dashed rgba(241, 231, 208, .35);
+    border-radius: 6px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 4px 8px;
+}
+
+.pick-slot .slot-label {
+    font-family: 'Oswald', sans-serif;
+    font-size: 8px;
+    letter-spacing: .1em;
+    color: var(--parchment-dim);
+}
+
+.pick-slot .slot-value {
+    font-family: 'Roboto Mono', monospace;
+    font-size: 15px;
+    color: var(--brass-bright);
+    font-weight: 700;
+}
+
+.pick-slot.filled {
+    border-style: solid;
+    border-color: var(--brass-bright);
+    background: rgba(230, 195, 79, .1);
+}
+
+.pick-arrow {
+    font-family: 'Oswald', sans-serif;
+    color: var(--parchment-dim);
+    font-size: 14px;
+}
+
+.slip-field {
     display: flex;
     flex-direction: column;
     gap: 6px;
 }
 
-.field label {
+.slip-field label {
     font-family: 'Oswald', sans-serif;
     font-size: 10px;
-    letter-spacing: .2em;
+    letter-spacing: .18em;
     color: var(--parchment-dim);
 }
 
-.field .selected-name {
-    font-family: 'Oswald', sans-serif;
-    font-size: 16px;
+.slip-odds {
+    font-family: 'Roboto Mono', monospace;
+    font-size: 20px;
     color: var(--brass-bright);
-    min-width: 120px;
+    font-weight: 700;
+}
+
+.slip-odds .suf {
+    font-size: 11px;
+    color: var(--parchment-dim);
+    margin-left: 2px;
 }
 
 input[type=number] {
@@ -543,7 +903,7 @@ input[type=number] {
     font-size: 16px;
     padding: 8px 10px;
     border-radius: 4px;
-    width: 130px;
+    width: 120px;
 }
 
 input[type=number]:focus {
@@ -573,130 +933,68 @@ input[type=number]:focus {
     color: var(--brass-bright);
 }
 
-button.primary {
-    font-family: 'Oswald', sans-serif;
-    letter-spacing: .15em;
-    font-weight: 600;
-    font-size: 14px;
-    background: var(--maroon);
-    color: var(--parchment);
-    border: 1px solid #a13341;
-    padding: 12px 26px;
-    border-radius: 4px;
-    cursor: pointer;
-    transition: transform .12s, background .2s;
-}
-
-button.primary:hover:not(:disabled) {
-    background: #932c39;
-    transform: translateY(-1px);
-}
-
-button.primary:disabled {
-    opacity: .35;
-    cursor: not-allowed;
-}
-
-button.ghost {
-    font-family: 'Oswald', sans-serif;
-    letter-spacing: .12em;
-    font-size: 12px;
-    background: transparent;
-    color: var(--parchment-dim);
-    border: 1px solid rgba(241, 231, 208, .3);
-    padding: 11px 18px;
-    border-radius: 4px;
-    cursor: pointer;
-}
-
-button.ghost:hover:not(:disabled) {
-    color: var(--parchment);
-    border-color: var(--parchment);
-}
-
-button.ghost:disabled {
-    opacity: .3;
-    cursor: not-allowed;
-}
-
-.current-bet {
-    font-family: 'Oswald', sans-serif;
-    font-size: 12px;
-    color: var(--parchment-dim);
-    margin-left: auto;
-    text-align: right;
-}
-
-.current-bet b {
-    color: var(--brass-bright);
-    font-family: 'Roboto Mono', monospace;
-}
-
-/* ---------- Result banner ---------- */
-.result-banner {
-    margin-top: 16px;
-    padding: 14px 18px;
+/* ---------- Cart ---------- */
+.cart-table-wrap {
+    overflow-x: auto;
+    background: linear-gradient(180deg, #12261a, #0c1b12);
+    border: 1px solid rgba(201, 162, 39, .3);
     border-radius: 6px;
-    font-family: 'Oswald', sans-serif;
-    letter-spacing: .05em;
-    display: none;
-    animation: fadein .4s ease;
 }
 
-.result-banner.show {
-    display: block;
-}
-
-.result-banner.win {
-    background: rgba(201, 162, 39, .15);
-    border: 1px solid var(--brass-bright);
-    color: var(--brass-bright);
-}
-
-.result-banner.lose {
-    background: rgba(124, 37, 48, .2);
-    border: 1px solid var(--maroon);
-    color: #e2a9af;
-}
-
-@keyframes fadein {
-    from {
-        opacity: 0;
-        transform: translateY(-4px);
-    }
-
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
-
-/* ---------- History ---------- */
-table {
+.cart-table {
     width: 100%;
     border-collapse: collapse;
     font-family: 'Roboto Mono', monospace;
     font-size: 12.5px;
+    min-width: 600px;
 }
 
-thead th {
+.cart-table thead th {
     text-align: left;
     font-family: 'Oswald', sans-serif;
-    letter-spacing: .12em;
+    letter-spacing: .1em;
     font-size: 10px;
     color: var(--parchment-dim);
     border-bottom: 1px solid rgba(201, 162, 39, .4);
     padding: 8px 10px;
 }
 
-tbody td {
+.cart-table tbody td {
     padding: 8px 10px;
     border-bottom: 1px solid rgba(241, 231, 208, .08);
     color: var(--parchment);
 }
 
-tbody tr:hover {
+.cart-table tbody tr:hover {
     background: rgba(201, 162, 39, .06);
+}
+
+.remove-btn {
+    background: none;
+    border: none;
+    color: #e2a9af;
+    cursor: pointer;
+    font-family: 'Roboto Mono', monospace;
+    font-size: 14px;
+}
+
+.remove-btn:hover {
+    color: #ff9daa;
+}
+
+.cart-actions {
+    margin-top: 12px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+.cart-total {
+    font-family: 'Oswald', sans-serif;
+    font-size: 14px;
+    color: var(--brass-bright);
+    margin-left: auto;
 }
 
 .pl-pos {
@@ -705,6 +1003,10 @@ tbody tr:hover {
 
 .pl-neg {
     color: #e2a9af;
+}
+
+.pl-zero {
+    color: var(--parchment-dim);
 }
 
 .empty-row td {
@@ -728,5 +1030,16 @@ footer {
     * {
         animation-duration: .001s !important;
         transition-duration: .001s !important;
+    }
+}
+
+@media (max-width: 640px) {
+    .bet-slip {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .cart-total {
+        margin-left: 0;
     }
 }

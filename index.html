@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>第一模擬競馬場 - DERBY SIM</title>
+    <title>模擬競馬 Web投票 - DERBY SIM</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link
@@ -16,69 +16,108 @@
 <body>
     <div class="wrap">
 
+        <!-- ===== ヘッダー ===== -->
         <div class="banner">
             <div>
-                <h1>第一模擬競馬場</h1>
-                <div class="sub">SIMULATED DERBY &mdash; 仮想チップのみ・実際の金銭は使用しません</div>
-                <div class="ticker"><span id="tickerText">単勝式シミュレーション ― 好きな馬にチップを賭けてレースの行方を見守ろう ― オッズは毎レース変動 ―
-                        単勝式シミュレーション ― 好きな馬にチップを賭けてレースの行方を見守ろう ― オッズは毎レース変動 ―</span></div>
+                <h1>模擬Web投票</h1>
+                <div class="sub">SIMULATED JRA-STYLE TOTALISATOR &mdash; 仮想チップのみ・実際の金銭は使用しません</div>
+                <div class="ticker"><span id="tickerText">これは実在の競馬団体・システムを再現した非公式のシミュレーションです ―
+                        全てのチップは仮想通貨で実際の金銭は使用しません ―
+                        これは実在の競馬団体・システムを再現した非公式のシミュレーションです ―
+                        全てのチップは仮想通貨で実際の金銭は使用しません ―</span></div>
             </div>
             <div class="balance-box">
-                <div class="label">所持チップ</div>
-                <div class="amount" id="balanceAmount">100</div>
+                <div class="label">仮想口座残高</div>
+                <div class="amount" id="balanceAmount">0</div>
             </div>
         </div>
 
-        <div class="section-title">レース番号 <span class="race-no" id="raceNo">R.1</span></div>
+        <!-- ===== 番組表(レース選択) ===== -->
+        <div class="section-title">本日の番組表 <span class="race-no" id="venueLabel">模擬競馬場</span></div>
+        <div class="race-tabs" id="raceTabs"></div>
 
+        <div class="race-info" id="raceInfo"></div>
+
+        <!-- ===== コース(実況) ===== -->
         <div class="track" id="track"></div>
+
+        <div class="race-controls">
+            <button class="primary" id="runRaceBtn">発売締切 &amp; 発走</button>
+            <div class="race-status-msg" id="raceStatusMsg"></div>
+        </div>
 
         <div class="result-banner" id="resultBanner"></div>
 
-        <div class="section-title">出走馬 &amp; オッズ<span style="flex:0;"></span></div>
-        <div class="bet-grid" id="betGrid"></div>
+        <!-- ===== レース結果パネル(確定後に表示) ===== -->
+        <div id="resultPanel"></div>
 
-        <div class="controls">
-            <div class="field">
-                <label>選択中の馬</label>
-                <div class="selected-name" id="selectedName">未選択</div>
-            </div>
-            <div class="field">
-                <label>賭け金 (チップ)</label>
-                <input type="number" id="betAmount" min="10" step="10" value="100">
-                <div class="chip-row">
-                    <button class="chip-btn" data-add="50">+50</button>
-                    <button class="chip-btn" data-add="100">+100</button>
-                    <button class="chip-btn" data-add="500">+500</button>
-                    <button class="chip-btn" data-max="1">最大</button>
-                </div>
-            </div>
-            <button class="primary" id="placeBetBtn">チップを賭ける</button>
-            <button class="primary" id="startRaceBtn" disabled>レース開始</button>
-            <button class="ghost" id="newRaceBtn" disabled>次のレースへ</button>
-            <div class="current-bet" id="currentBetInfo"></div>
+        <!-- ===== 出馬表 ===== -->
+        <div class="section-title">出馬表 <span class="race-no" id="entryHint">式別を選び、馬番をタップして選択</span></div>
+        <div class="entry-table-wrap">
+            <table class="entry-table" id="entryTable"></table>
         </div>
 
-        <div class="section-title">払い戻し履歴</div>
-        <table>
-            <thead>
-                <tr>
-                    <th>R</th>
-                    <th>賭けた馬</th>
-                    <th>賭け金</th>
-                    <th>着順</th>
-                    <th>払戻</th>
-                    <th>収支</th>
-                </tr>
-            </thead>
-            <tbody id="historyBody">
-                <tr class="empty-row">
-                    <td colspan="6">まだレース履歴はありません</td>
-                </tr>
-            </tbody>
-        </table>
+        <!-- ===== 式別タブ ===== -->
+        <div class="section-title">投票(式別)</div>
+        <div class="bet-type-tabs" id="betTypeTabs"></div>
 
-        <footer>ALL CHIPS ARE VIRTUAL &middot; NO REAL MONEY INVOLVED &middot; FOR ENTERTAINMENT ONLY</footer>
+        <!-- ===== 投票フォーム(馬券) ===== -->
+        <div class="bet-slip" id="betSlip"></div>
+
+        <!-- ===== 購入予定(カート) ===== -->
+        <div class="section-title">購入予定(カート)</div>
+        <div class="cart-table-wrap">
+            <table class="cart-table" id="cartTable">
+                <thead>
+                    <tr>
+                        <th>R</th>
+                        <th>式別</th>
+                        <th>買い目</th>
+                        <th>金額</th>
+                        <th>予想オッズ</th>
+                        <th>予想払戻</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody id="cartBody">
+                    <tr class="empty-row">
+                        <td colspan="7">カートは空です</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        <div class="cart-actions">
+            <button class="ghost" id="clearCartBtn">カートを空にする</button>
+            <div class="cart-total" id="cartTotal">合計 0 チップ</div>
+            <button class="primary" id="confirmPurchaseBtn">購入を確定する</button>
+        </div>
+
+        <!-- ===== 購入履歴 ===== -->
+        <div class="section-title">購入履歴(確定済み)</div>
+        <div class="cart-table-wrap">
+            <table class="cart-table" id="historyTable">
+                <thead>
+                    <tr>
+                        <th>R</th>
+                        <th>式別</th>
+                        <th>買い目</th>
+                        <th>金額</th>
+                        <th>結果</th>
+                        <th>払戻</th>
+                        <th>収支</th>
+                    </tr>
+                </thead>
+                <tbody id="historyBody">
+                    <tr class="empty-row">
+                        <td colspan="7">まだ購入履歴はありません</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <footer>ALL CHIPS ARE VIRTUAL &middot; NO REAL MONEY INVOLVED &middot; UNOFFICIAL FAN-MADE SIMULATION &middot;
+            FOR
+            ENTERTAINMENT ONLY</footer>
     </div>
 
     <script src="script.js"></script>
