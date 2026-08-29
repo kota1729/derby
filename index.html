@@ -32,18 +32,17 @@
             </div>
         </div>
 
-        <!-- ===== 番組表(レース選択) ===== -->
-        <div class="section-title">本日の番組表 <span class="race-no" id="venueLabel">模擬競馬場</span></div>
-        <div class="race-tabs" id="raceTabs"></div>
+        <!-- ===== 現在のレース ===== -->
+        <div class="section-title">現在のレース <span class="race-no" id="raceSeqLabel">第1回</span></div>
 
         <div class="race-info" id="raceInfo"></div>
+        <div class="cooldown-box" id="cooldownBox" style="display:none;"></div>
 
-        <!-- ===== コース(実況・発走したら表示) ===== -->
-        <div class="track-placeholder" id="trackPlaceholder">🏇 「発売締切 &amp; 発走」を押すとレース映像が表示されます</div>
+        <!-- ===== コース(発走したら自動表示) ===== -->
+        <div class="track-placeholder" id="trackPlaceholder">🏇 発走時刻になると、ここにレース映像が自動的に表示されます</div>
         <div class="track" id="track" style="display:none;"></div>
 
         <div class="race-controls">
-            <button class="primary" id="runRaceBtn">発売締切 &amp; 発走</button>
             <div class="race-status-msg" id="raceStatusMsg"></div>
         </div>
 

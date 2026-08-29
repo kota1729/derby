@@ -280,6 +280,36 @@ body {
     color: var(--parchment-dim);
 }
 
+/* ---------- Cooldown (次のレースまでの待機) ---------- */
+.cooldown-box {
+    margin-top: 12px;
+    background: linear-gradient(180deg, #12261a, #0c1b12);
+    border: 1px solid rgba(201, 162, 39, .35);
+    border-radius: 6px;
+    padding: 14px 18px;
+}
+
+.cooldown-label {
+    font-family: 'Oswald', sans-serif;
+    letter-spacing: .1em;
+    font-size: 13px;
+    color: var(--brass-bright);
+    margin-bottom: 8px;
+}
+
+.cooldown-bar {
+    height: 6px;
+    border-radius: 3px;
+    background: rgba(241, 231, 208, .1);
+    overflow: hidden;
+}
+
+.cooldown-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--brass), var(--brass-bright));
+    transition: width 1s linear;
+}
+
 /* ---------- Track placeholder (発走前) ---------- */
 .track-placeholder {
     margin-top: 14px;
@@ -424,6 +454,27 @@ body {
 
 .horse.finished {
     opacity: .55;
+}
+
+.horse.leading .silhouette {
+    filter: drop-shadow(0 0 3px var(--brass-bright)) drop-shadow(0 0 7px rgba(230, 195, 79, .65));
+}
+
+.horse.leading .tag {
+    background: var(--brass-bright);
+    color: #171310;
+    font-weight: 700;
+    box-shadow: 0 0 6px rgba(230, 195, 79, .8);
+}
+
+.standing-row.lead {
+    background: rgba(230, 195, 79, .12);
+}
+
+.standing-row.lead .srank,
+.standing-row.lead .sname {
+    color: var(--brass-bright);
+    font-weight: 700;
 }
 
 /* ---------- Galloping animation ---------- */

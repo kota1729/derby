@@ -5,9 +5,12 @@
        0. 定数・データプール
        ========================================================= */
 
-    const RACE_COUNT = 12;
     const SIM_ITER = 2200; // オッズ推定用の内部シミュレーション回数
     const START_BALANCE = 10000;
+    const SLOT_MS = 5 * 60 * 1000; // 5分刻みのスケジュール枠(日本時間0時起点でも同じグリッドになる)
+
+    // 実際のJRAレースの平均速度の目安(時速60km/h ≒ 秒速16.7m)。
+    const AVG_SPEED_MPS = 16.7;
 
     const NAME_PREFIX = ["サンダー", "ミッドナイト", "ゴールド", "ブレイブ", "ウィンド", "レッド", "シルバー",
         "ラッキー", "スター", "ダイヤモンド", "インペリアル", "クリムゾン", "シャイニング", "ノーブル", "スカイ",
@@ -63,13 +66,15 @@
        ========================================================= */
 
     let balance = START_BALANCE;
-    let races = [];
-    let activeRaceIdx = 0;
+    let raceSeq = 0;
+    let currentRace = null;
+    let archiveRaces = []; // 確定済みレースの履歴(アーカイブ)
     let currentBetType = "win";
     let currentSelection = []; // 馬番の配列(クリック順)
-    let cart = []; // {raceIdx, raceNo, type, selection, amount, odds}
+    let cart = []; // {raceNo, raceLabelStr, type, selection, amount, odds}
     let history = []; // 確定済み購入(結果反映後)
     let selectedArchiveRaceNo = null;
+    let raceAnimInterval = null;
 
     /* =========================================================
        2. DOM参照
@@ -77,11 +82,11 @@
 
     const $ = (id) => document.getElementById(id);
     const balanceEl = $("balanceAmount");
-    const raceTabsEl = $("raceTabs");
+    const raceSeqLabelEl = $("raceSeqLabel");
     const raceInfoEl = $("raceInfo");
+    const cooldownBoxEl = $("cooldownBox");
     const trackEl = $("track");
     const trackPlaceholderEl = $("trackPlaceholder");
-    const runRaceBtn = $("runRaceBtn");
     const raceStatusMsgEl = $("raceStatusMsg");
     const resultBannerEl = $("resultBanner");
     const resultPanelEl = $("resultPanel");
@@ -98,8 +103,39 @@
     const confirmPurchaseBtn = $("confirmPurchaseBtn");
 
     /* =========================================================
-       3. ユーティリティ
+       3. ユーティリティ(決定論的な乱数・時刻表示)
        ========================================================= */
+
+    // 文字列/数値から32bitのハッシュ値を作る(シードの下準備)
+    function hashSeed(input) {
+        let h = 2166136261;
+        const s = String(input);
+        for (let i = 0; i < s.length; i++) {
+            h ^= s.charCodeAt(i);
+            h = Math.imul(h, 16777619);
+        }
+        return h >>> 0;
+    }
+
+    // mulberry32: シード値から再現可能な疑似乱数列を作る軽量PRNG。
+    // 同じシード(=同じ発走時刻)を渡せば、どの端末でも全く同じ乱数列 = 同じレースになる。
+    function mulberry32(seed) {
+        let a = seed >>> 0;
+        return function () {
+            a |= 0; a = (a + 0x6D2B79F5) | 0;
+            let t = Math.imul(a ^ (a >>> 15), 1 | a);
+            t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+            return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+        };
+    }
+
+    // 日本時間(Asia/Tokyo)でHH:MM表示にする
+    function formatJST(ms) {
+        return new Date(ms).toLocaleTimeString('ja-JP', { timeZone: 'Asia/Tokyo', hour: '2-digit', minute: '2-digit', hour12: false });
+    }
+    function formatJSTDate(ms) {
+        return new Date(ms).toLocaleDateString('ja-JP', { timeZone: 'Asia/Tokyo', month: '2-digit', day: '2-digit' });
+    }
 
     function shade(hex, percent) {
         const num = parseInt(hex.replace('#', ''), 16);
@@ -114,12 +150,14 @@
 
     function pad2(n) { return n < 10 ? "0" + n : "" + n; }
 
-    function uniqueName(used) {
+    function raceLabel(race) { return `${race.postTimeLabel}発走`; }
+
+    function uniqueName(used, rand) {
         let name;
         let guard = 0;
         do {
-            const p = NAME_PREFIX[Math.floor(Math.random() * NAME_PREFIX.length)];
-            const s = NAME_SUFFIX[Math.floor(Math.random() * NAME_SUFFIX.length)];
+            const p = NAME_PREFIX[Math.floor(rand() * NAME_PREFIX.length)];
+            const s = NAME_SUFFIX[Math.floor(rand() * NAME_SUFFIX.length)];
             name = p + s;
             guard++;
         } while (used.has(name) && guard < 50);
@@ -127,9 +165,9 @@
         return name;
     }
 
-    function randomJockey() {
-        const sur = JOCKEY_SURNAME[Math.floor(Math.random() * JOCKEY_SURNAME.length)];
-        const giv = JOCKEY_GIVEN_JP[Math.floor(Math.random() * JOCKEY_GIVEN_JP.length)];
+    function randomJockey(rand) {
+        const sur = JOCKEY_SURNAME[Math.floor(rand() * JOCKEY_SURNAME.length)];
+        const giv = JOCKEY_GIVEN_JP[Math.floor(rand() * JOCKEY_GIVEN_JP.length)];
         return sur + " " + giv;
     }
 
@@ -143,34 +181,36 @@
     }
 
     /* =========================================================
-       4. 馬・レース生成
+       4. 馬・レース生成(発走時刻をシードにした決定論的生成)
        ========================================================= */
 
-    function makeHorse(number, frame, usedNames) {
+    function makeHorse(number, frame, usedNames, rand) {
         const sexPool = ["牡", "牝", "牡", "セ"];
-        const sex = sexPool[Math.floor(Math.random() * sexPool.length)];
-        const age = 3 + Math.floor(Math.random() * 5);
+        const sex = sexPool[Math.floor(rand() * sexPool.length)];
+        const age = 3 + Math.floor(rand() * 5);
         let weight = sex === "牝" ? 54 : 56;
-        weight += (Math.random() < 0.5 ? -1 : 1) * (Math.random() < 0.5 ? 0 : (Math.random() < 0.5 ? 1 : 2));
+        weight += (rand() < 0.5 ? -1 : 1) * (rand() < 0.5 ? 0 : (rand() < 0.5 ? 1 : 2));
         weight = Math.max(50, Math.min(60, weight));
-        const weightStr = (weight + (Math.random() < 0.5 ? 0 : 0.5)).toFixed(1);
+        const weightStr = (weight + (rand() < 0.5 ? 0 : 0.5)).toFixed(1);
 
         return {
             number,
             frame,
-            name: uniqueName(usedNames),
+            name: uniqueName(usedNames, rand),
             color: horseSilhouetteColors[(number - 1) % horseSilhouetteColors.length],
             sexAge: `${sex}${age}`,
             weight: weightStr,
-            jockey: randomJockey(),
-            strength: 0.5 + Math.random() * 1.1,
+            jockey: randomJockey(rand),
+            strength: 0.5 + rand() * 1.1,
             pos: 0,
             finished: false,
             finishOrder: null,
+            finishTimeMs: null,
+            paceWobble: 0,
         };
     }
 
-    function simulateFinishOrders(horses, iterations) {
+    function simulateFinishOrders(horses, iterations, rand) {
         const results = [];
         const base = horses.map(h => ({ num: h.number, s: h.strength }));
         for (let it = 0; it < iterations; it++) {
@@ -179,7 +219,7 @@
             while (pool.length) {
                 let total = 0;
                 for (let i = 0; i < pool.length; i++) total += pool[i].s;
-                let r = Math.random() * total;
+                let r = rand() * total;
                 let idx = 0;
                 for (; idx < pool.length; idx++) {
                     r -= pool[idx].s;
@@ -194,29 +234,34 @@
         return results;
     }
 
-    function makeRace(raceNo, startMinutes) {
-        const runnerCount = 8 + Math.floor(Math.random() * 9); // 8-16
+    // slotStart(発走予定時刻のUnixミリ秒)だけを種にして、馬・オッズ・実際の着順まで
+    // すべて再現可能に生成する。同じslotStartなら、どの端末で計算しても完全に同じ結果になる。
+    function makeRace(raceNo, slotStart) {
+        const rand = mulberry32(hashSeed(slotStart));
+
+        const runnerCount = 8 + Math.floor(rand() * 9); // 8-16
         const frames = assignFrames(runnerCount);
         const usedNames = new Set();
         const horses = [];
         for (let i = 1; i <= runnerCount; i++) {
-            horses.push(makeHorse(i, frames[i - 1], usedNames));
+            horses.push(makeHorse(i, frames[i - 1], usedNames, rand));
         }
-        const simOrders = simulateFinishOrders(horses, SIM_ITER);
-
-        const hh = pad2(Math.floor(startMinutes / 60));
-        const mm = pad2(startMinutes % 60);
+        const simOrders = simulateFinishOrders(horses, SIM_ITER, rand);
+        const [actualOrder] = simulateFinishOrders(horses, 1, rand); // このレースの「本当の」着順を先に決定しておく
 
         const race = {
             raceNo,
-            postTime: `${hh}:${mm}`,
-            className: CLASS_NAMES[Math.floor(Math.random() * CLASS_NAMES.length)],
-            surface: SURFACES[Math.floor(Math.random() * SURFACES.length)],
-            distance: DISTANCES[Math.floor(Math.random() * DISTANCES.length)],
+            slotStart,
+            postTimeLabel: formatJST(slotStart),
+            dateLabel: formatJSTDate(slotStart),
+            className: CLASS_NAMES[Math.floor(rand() * CLASS_NAMES.length)],
+            surface: SURFACES[Math.floor(rand() * SURFACES.length)],
+            distance: DISTANCES[Math.floor(rand() * DISTANCES.length)],
             horses,
             simOrders,
             status: "open", // open | running | finished
-            result: null,   // 確定後: 馬番の配列(1着から順)
+            result: null,
+            actualFinishOrder: actualOrder,
         };
 
         // 単勝・複勝オッズをシミュレーション結果から算出
@@ -231,20 +276,24 @@
             h.placeOddsLow = Math.max(1.0, Math.round(placeBase * 0.85 * 10) / 10);
             h.placeOddsHigh = Math.round(placeBase * 1.15 * 10) / 10;
         });
-        // 人気(単勝オッズ昇順)
         const byOdds = [...horses].sort((a, b) => a.winOdds - b.winOdds);
         byOdds.forEach((h, idx) => { h.popularity = idx + 1; });
 
-        return race;
-    }
+        // 実際の着順に基づき、決定論的な所要タイムを各馬に割り当てる
+        // (発走時刻がシードなので、どの端末でも同じ映像・同じ結末になる)
+        const baseDur = (race.distance / AVG_SPEED_MPS) * 1000;
+        const n = actualOrder.length;
+        const spread = baseDur * 0.16;
+        const step = n > 1 ? spread / (n - 1) : 0;
+        actualOrder.forEach((num, rank) => {
+            const h = horses.find(x => x.number === num);
+            const jitter = (rand() - 0.5) * step * 0.3;
+            h.finishTimeMs = Math.max(baseDur * 0.85, baseDur * 0.92 + step * rank + jitter);
+            h.paceWobble = rand() * 2 - 1;
+        });
+        race.totalAnimMs = Math.max(...horses.map(h => h.finishTimeMs));
 
-    function buildProgram() {
-        races = [];
-        let t = 9 * 60 + 50; // 09:50スタート
-        for (let r = 1; r <= RACE_COUNT; r++) {
-            races.push(makeRace(r, t));
-            t += 27 + Math.floor(Math.random() * 6); // 約27〜32分間隔
-        }
+        return race;
     }
 
     /* =========================================================
@@ -283,40 +332,59 @@
     }
 
     /* =========================================================
-       6. レンダリング: 番組表タブ
+       6. スケジューラ(日本時間0時起点・5分刻みで自動開催)
        ========================================================= */
 
-    function renderRaceTabs() {
-        raceTabsEl.innerHTML = "";
-        races.forEach((race, idx) => {
-            const div = document.createElement("div");
-            div.className = "race-tab" + (idx === activeRaceIdx ? " active" : "");
-            const statusLabel = race.status === "open" ? "発売中" : (race.status === "running" ? "実況中" : "確定");
-            div.innerHTML = `
-        <div class="rno">${race.raceNo}R</div>
-        <div class="rtime">${race.postTime}発走</div>
-        <span class="rstatus ${race.status}">${statusLabel}</span>
-      `;
-            div.addEventListener("click", () => {
-                if (races[activeRaceIdx].status === "running") return;
-                activeRaceIdx = idx;
-                currentSelection = [];
-                renderAll();
-            });
-            raceTabsEl.appendChild(div);
-        });
+    function nextSlotFromNow() {
+        const now = Date.now();
+        return (Math.floor(now / SLOT_MS) + 1) * SLOT_MS;
+    }
+
+    function loadOrCreateRace(slotStart) {
+        raceSeq += 1;
+        currentRace = makeRace(raceSeq, slotStart);
+        currentSelection = [];
+        cart = [];
+        renderAll();
+    }
+
+    // 1秒ごとに呼ばれる時計係。発走時刻になったらレースを自動的に開始する。
+    function masterTick() {
+        if (!currentRace) return;
+        const race = currentRace;
+        if (race.status !== "open") return;
+
+        const now = Date.now();
+        const remain = race.slotStart - now;
+        if (remain <= 0) {
+            beginRaceAnimation(race);
+        } else {
+            updatePostTimeCountdown(remain, race);
+        }
+    }
+
+    function updatePostTimeCountdown(remainMs, race) {
+        if (!cooldownBoxEl) return;
+        const m = Math.floor(remainMs / 60000);
+        const s = Math.floor((remainMs % 60000) / 1000);
+        const pct = Math.max(0, Math.min(100, 100 - (remainMs / SLOT_MS) * 100));
+        cooldownBoxEl.innerHTML = `
+      <div class="cooldown-label">発走まで ${m}:${pad2(s)} ・ 次のレースは 日本時間 ${race.postTimeLabel} 発走予定</div>
+      <div class="cooldown-bar"><div class="cooldown-fill" style="width:${pct}%;"></div></div>
+    `;
     }
 
     /* =========================================================
-       7. レンダリング: レース情報バー
+       7. レンダリング: 現在のレース情報
        ========================================================= */
 
     function renderRaceInfo() {
-        const race = races[activeRaceIdx];
+        const race = currentRace;
+        raceSeqLabelEl.textContent = raceLabel(race);
         raceInfoEl.innerHTML = `
-      <div class="rname">${race.raceNo}R　${race.className}</div>
+      <div class="rname">${race.className}</div>
       <div class="rmeta">${race.surface} ${race.distance}m</div>
-      <div class="rmeta">発走 ${race.postTime}</div>
+      <div class="rmeta">発走 ${race.dateLabel} ${race.postTimeLabel}(日本時間)</div>
       <div class="rmeta">${race.horses.length}頭立て</div>
     `;
     }
@@ -347,8 +415,6 @@
         return `M${TRACK_CX_LEFT},${yTop} L${TRACK_CX_RIGHT},${yTop} A${r},${r} 0 0 1 ${TRACK_CX_RIGHT},${yBot} L${TRACK_CX_LEFT},${yBot} A${r},${r} 0 0 1 ${TRACK_CX_LEFT},${yTop} Z`;
     }
 
-    // レースの周回情報(400m×何周か)。フィニッシュ地点は常に同じ場所(フラクション0)になるよう
-    // スタート地点側で調整する(距離によってゲート位置が変わる実際のコースに近い挙動)。
     function trackGeometryFor(race) {
         const totalLaps = race.distance / TRACK_LAP_METERS;
         const startFrac = ((1 - (totalLaps % 1)) % 1 + 1) % 1;
@@ -364,22 +430,43 @@
         const p2 = centerlineEl.getPointAtLength((L + 1) % pathLen);
         const dx = p2.x - p.x, dy = p2.y - p.y;
         const mag = Math.sqrt(dx * dx + dy * dy) || 1;
-        const px = -dy / mag, py = dx / mag; // 進行方向に対する法線(横方向のレーンずらし用)
+        const px = -dy / mag, py = dx / mag;
         const offset = (idx - (geo.n - 1) / 2) * geo.spacing;
         return { x: p.x + px * offset, y: p.y + py * offset };
+    }
+
+    function effectiveScore(h) {
+        return h.finished ? (100000 - h.finishOrder) : h.pos;
+    }
+
+    function currentLeaderNum(race) {
+        let best = null, bestScore = -Infinity;
+        race.horses.forEach(h => {
+            const s = effectiveScore(h);
+            if (s > bestScore) { bestScore = s; best = h.number; }
+        });
+        return best;
+    }
+
+    function updateLeaderHighlight(race) {
+        const leader = currentLeaderNum(race);
+        race.horses.forEach(h => {
+            const el = document.getElementById(`horse-${h.number}`);
+            if (el) el.classList.toggle("leading", h.number === leader);
+        });
     }
 
     function renderStandings(race) {
         const el = document.getElementById("liveStandings");
         if (!el) return;
-        const sorted = [...race.horses].sort((a, b) => b.pos - a.pos);
+        const sorted = [...race.horses].sort((a, b) => effectiveScore(b) - effectiveScore(a));
         el.innerHTML = `<div class="lstitle">現在の順位</div>` + sorted.map((h, i) => `
-      <div class="standing-row"><span class="srank">${i + 1}</span><span class="sname">${h.number}.${h.name}</span></div>
+      <div class="standing-row${i === 0 ? ' lead' : ''}"><span class="srank">${i + 1}</span><span class="sname">${h.number}.${h.name}</span></div>
     `).join("");
     }
 
     function renderTrack() {
-        const race = races[activeRaceIdx];
+        const race = currentRace;
 
         if (race.status === "open") {
             trackEl.style.display = "none";
@@ -408,6 +495,8 @@
         });
 
         const laps = race.distance / TRACK_LAP_METERS;
+        const estSec = Math.round(race.distance / AVG_SPEED_MPS);
+        const estMin = Math.floor(estSec / 60), estRem = estSec % 60;
 
         trackEl.innerHTML = `
       <div class="oval-panel">
@@ -425,7 +514,7 @@
         </div>
         <div class="live-standings" id="liveStandings"></div>
       </div>
-      <div class="lap-info">1周 ${TRACK_LAP_METERS}m ・ 総距離 ${race.distance}m(${laps % 1 === 0 ? laps : laps.toFixed(1)}周)</div>
+      <div class="lap-info">1周 ${TRACK_LAP_METERS}m ・ 総距離 ${race.distance}m(${laps % 1 === 0 ? laps : laps.toFixed(1)}周) ・ 予想タイム 約${estMin}分${estRem}秒</div>
     `;
 
         const centerlineEl = document.getElementById("centerlinePath");
@@ -447,52 +536,48 @@
     }
 
     /* =========================================================
-       9. レース実況(発走)
+       9. レース実況(発走時刻に自動開始) ― 実際のレースタイムに近い速度で進行
        ========================================================= */
 
-    function startRace() {
-        const race = races[activeRaceIdx];
-        if (race.status !== "open") return;
-
-        // このレースにカート未購入の買い目が残っていないか確認
-        const pendingForThisRace = cart.some(b => b.raceIdx === activeRaceIdx);
-        if (pendingForThisRace) {
-            flashResult("カートに未購入の買い目があります。先に「購入を確定する」を押すか、カートから削除してください。", "lose");
-            return;
-        }
-
+    function beginRaceAnimation(race) {
         race.status = "running";
-        runRaceBtn.disabled = true;
-        raceTabsEl.querySelectorAll(".race-tab").forEach(t => t.style.pointerEvents = "none");
         hideResult();
         resultPanelEl.innerHTML = "";
-        raceStatusMsgEl.textContent = "発走しました…";
+        raceStatusMsgEl.textContent = "実況中です。";
 
-        race.horses.forEach(h => { h.pos = 0; h.finished = false; h.finishOrder = null; });
+        if (cart.length > 0) {
+            cart = [];
+            renderCart();
+            flashResult("発売を締め切りました。カート内の未購入分は無効になりました。", "lose");
+        }
 
-        renderTrack(); // 楕円コースと馬をスタート地点に初期配置
+        race.horses.forEach(h => { h.pos = 0; h.finished = false; });
+
+        renderTrack();
+        renderRaceControls();
 
         race.horses.forEach(h => {
             const el = document.getElementById(`horse-${h.number}`);
-            if (el) { el.classList.remove("finished", "winner"); el.classList.add("running"); }
+            if (el) { el.classList.remove("finished", "winner", "leading"); el.classList.add("running"); }
         });
 
         const ctx = race.__trackCtx;
+        const raceStartAt = performance.now();
         let finishedCount = 0;
-        const orderObjs = [];
 
-        const interval = setInterval(() => {
+        if (raceAnimInterval) clearInterval(raceAnimInterval);
+        raceAnimInterval = setInterval(() => {
+            const elapsed = performance.now() - raceStartAt;
             race.horses.forEach((h, idx) => {
                 if (h.finished) return;
-                const jitter = Math.random() * 1.6;
-                h.pos += (h.strength * 1.05 + jitter);
+                const t = Math.min(1, elapsed / h.finishTimeMs);
+                const wobble = Math.sin(t * Math.PI) * 1.3 * h.paceWobble;
+                h.pos = Math.min(100, Math.max(h.pos, t * 100 + wobble));
                 const el = document.getElementById(`horse-${h.number}`);
-                if (h.pos >= 100) {
+                if (t >= 1) {
                     h.pos = 100;
                     h.finished = true;
                     finishedCount++;
-                    h.finishOrder = finishedCount;
-                    orderObjs.push(h);
                     if (el) el.classList.remove("running");
                 }
                 if (ctx && el) {
@@ -501,34 +586,35 @@
                     el.style.top = (pt.y / 260 * 100) + "%";
                 }
             });
+            updateLeaderHighlight(race);
             renderStandings(race);
 
             if (finishedCount >= race.horses.length) {
-                clearInterval(interval);
-                finishRace(race, orderObjs);
+                clearInterval(raceAnimInterval);
+                raceAnimInterval = null;
+                concludeRace(race);
+                loadOrCreateRace(race.slotStart + SLOT_MS); // 次の発走枠を即座に投票受付開始
             }
-        }, 110);
+        }, 150);
     }
 
-    function finishRace(race, orderObjs) {
+    function concludeRace(race) {
         race.status = "finished";
-        race.result = orderObjs.map(h => h.number);
-        runRaceBtn.disabled = true;
-        raceTabsEl.querySelectorAll(".race-tab").forEach(t => t.style.pointerEvents = "auto");
+        race.result = race.actualFinishOrder;
 
         const winnerNum = race.result[0];
         race.horses.forEach(h => {
             const el = document.getElementById(`horse-${h.number}`);
             if (!el) return;
+            el.classList.remove("leading");
             el.classList.add("finished");
             if (h.number === winnerNum) el.classList.add("winner");
         });
 
-        // このレースに紐づく確定済み(購入済み)の買い目を精算
         let totalPayout = 0;
         let anyBetOnThisRace = false;
         history.forEach(rec => {
-            if (rec.raceIdx !== races.indexOf(race)) return;
+            if (rec.raceNo !== race.raceNo) return;
             if (rec.settled) return;
             anyBetOnThisRace = true;
             const { hit } = evaluateBet(rec.type, rec.selection, race.result);
@@ -540,23 +626,22 @@
         if (totalPayout > 0) updateBalance(balance + totalPayout, true);
 
         const winnerHorse = race.horses.find(h => h.number === winnerNum);
+        const label = raceLabel(race);
         if (anyBetOnThisRace) {
             if (totalPayout > 0) {
-                flashResult(`🏆 ${race.raceNo}R確定! 1着は${winnerNum}.${winnerHorse.name}。払戻合計 ${totalPayout} チップ!`, "win");
+                flashResult(`🏆 ${label}確定! 1着は${winnerNum}.${winnerHorse.name}。払戻合計 ${totalPayout} チップ!`, "win");
             } else {
-                flashResult(`${race.raceNo}R確定。1着は${winnerNum}.${winnerHorse.name}。的中はありませんでした。`, "lose");
+                flashResult(`${label}確定。1着は${winnerNum}.${winnerHorse.name}。的中はありませんでした。`, "lose");
             }
         } else {
-            flashResult(`${race.raceNo}R確定。1着は${winnerNum}.${winnerHorse.name}。`, "info");
+            flashResult(`${label}確定。1着は${winnerNum}.${winnerHorse.name}。`, "info");
         }
+
+        archiveRaces.push(race);
+        selectedArchiveRaceNo = race.raceNo;
 
         renderResultPanel(race);
         renderHistory();
-        renderRaceTabs();
-        renderRaceControls();
-        renderEntryTable();
-        renderBetSlip();
-        selectedArchiveRaceNo = race.raceNo;
         renderArchive();
     }
 
@@ -570,11 +655,11 @@
         else if (type === "wide") { const t3 = order.slice(0, 3); hit = selection.every(s => t3.includes(s)); }
         else if (type === "trio") { const t3 = order.slice(0, 3); hit = selection.every(s => t3.includes(s)); }
         else if (type === "trifecta") { hit = order[0] === selection[0] && order[1] === selection[1] && order[2] === selection[2]; }
-        return { hit, payout: 0 }; // payoutは呼び出し側でロック済みオッズを使って計算する
+        return { hit };
     }
 
     /* =========================================================
-       10. レンダリング: 結果パネル(着順+払戻金表)
+       10. レンダリング: 結果パネル(着順+払戻金) / アーカイブ
        ========================================================= */
 
     function buildPayoutRows(race) {
@@ -618,7 +703,7 @@
 
         return `
       <div class="result-panel">
-        <h3>${race.raceNo}R ${race.className}(${race.surface}${race.distance}m) 着順</h3>
+        <h3>${race.dateLabel} ${raceLabel(race)} ${race.className}(${race.surface}${race.distance}m) 着順</h3>
         <table class="finish-table">
           <thead><tr><th>着順</th><th>枠</th><th>馬番</th><th>馬名</th><th>騎手</th></tr></thead>
           <tbody>${finishRows}</tbody>
@@ -637,24 +722,23 @@
     }
 
     function renderArchive() {
-        const finishedRaces = races.filter(r => r.status === "finished");
-        if (finishedRaces.length === 0) {
+        if (archiveRaces.length === 0) {
             archiveListEl.innerHTML = `<div class="archive-empty">まだ確定したレースはありません</div>`;
             archiveDetailEl.innerHTML = "";
             return;
         }
-        if (selectedArchiveRaceNo === null || !finishedRaces.some(r => r.raceNo === selectedArchiveRaceNo)) {
-            selectedArchiveRaceNo = finishedRaces[finishedRaces.length - 1].raceNo;
+        if (selectedArchiveRaceNo === null || !archiveRaces.some(r => r.raceNo === selectedArchiveRaceNo)) {
+            selectedArchiveRaceNo = archiveRaces[archiveRaces.length - 1].raceNo;
         }
 
         archiveListEl.innerHTML = "";
-        finishedRaces.forEach(race => {
+        archiveRaces.slice().reverse().forEach(race => {
             const winner = race.horses.find(h => h.number === race.result[0]);
             const div = document.createElement("div");
             div.className = "race-tab" + (selectedArchiveRaceNo === race.raceNo ? " active" : "");
             div.innerHTML = `
-        <div class="rno">${race.raceNo}R</div>
-        <div class="rtime">${race.postTime}発走</div>
+        <div class="rno">${race.postTimeLabel}</div>
+        <div class="rtime">${race.dateLabel}</div>
         <span class="rstatus finished">1着 ${winner.number}番</span>
       `;
             div.addEventListener("click", () => {
@@ -664,24 +748,22 @@
             archiveListEl.appendChild(div);
         });
 
-        const selectedRace = finishedRaces.find(r => r.raceNo === selectedArchiveRaceNo);
+        const selectedRace = archiveRaces.find(r => r.raceNo === selectedArchiveRaceNo);
         archiveDetailEl.innerHTML = buildResultHTML(selectedRace);
     }
 
     function renderRaceControls() {
-        const race = races[activeRaceIdx];
+        const race = currentRace;
         if (race.status === "open") {
-            runRaceBtn.disabled = false;
-            runRaceBtn.textContent = "発売締切 & 発走";
-            raceStatusMsgEl.textContent = "このレースは発売中です。買い目をカートに入れて購入してください。";
+            raceStatusMsgEl.textContent = "投票受付中です。買い目をカートに入れて購入してください。発走時刻になると自動的にレースが始まります。";
+            cooldownBoxEl.style.display = "block";
+            updatePostTimeCountdown(Math.max(0, race.slotStart - Date.now()), race);
         } else if (race.status === "running") {
-            runRaceBtn.disabled = true;
-            runRaceBtn.textContent = "実況中…";
-            raceStatusMsgEl.textContent = "レース進行中です。";
+            raceStatusMsgEl.textContent = "実況中です。";
+            cooldownBoxEl.style.display = "none";
         } else {
-            runRaceBtn.disabled = true;
-            runRaceBtn.textContent = "確定済み";
-            raceStatusMsgEl.textContent = "このレースは確定しました。番組表から他のレースを選べます。";
+            raceStatusMsgEl.textContent = "このレースは確定しました。";
+            cooldownBoxEl.style.display = "none";
         }
     }
 
@@ -690,7 +772,7 @@
        ========================================================= */
 
     function renderEntryTable() {
-        const race = races[activeRaceIdx];
+        const race = currentRace;
         const finished = race.status === "finished";
 
         const rowsHtml = race.horses.map(h => {
@@ -742,7 +824,6 @@
         } else {
             const need = BET_TYPES[currentBetType].picks;
             if (currentSelection.length >= need) {
-                // 上限に達している場合は先頭を捨てて追加(最新の選択を優先)
                 currentSelection.shift();
             }
             currentSelection.push(num);
@@ -778,7 +859,7 @@
        ========================================================= */
 
     function renderBetSlip() {
-        const race = races[activeRaceIdx];
+        const race = currentRace;
         const def = BET_TYPES[currentBetType];
         const disabled = race.status !== "open";
 
@@ -843,7 +924,7 @@
     }
 
     function addToCart(odds) {
-        const race = races[activeRaceIdx];
+        const race = currentRace;
         const def = BET_TYPES[currentBetType];
         const amountInput = $("slipAmount");
         const amount = Math.floor(Number(amountInput.value));
@@ -859,8 +940,8 @@
         }
 
         cart.push({
-            raceIdx: activeRaceIdx,
             raceNo: race.raceNo,
+            raceLabelStr: raceLabel(race),
             type: currentBetType,
             typeLabel: def.label,
             selection: [...currentSelection],
@@ -886,7 +967,7 @@
         } else {
             cartBodyEl.innerHTML = cart.map((b, i) => `
         <tr>
-          <td>${b.raceNo}R</td>
+          <td>${b.raceLabelStr}</td>
           <td>${b.typeLabel}</td>
           <td>${b.selectionLabel}</td>
           <td>${b.amount}</td>
@@ -917,8 +998,8 @@
         updateBalance(balance - total, true);
         cart.forEach(b => {
             history.push({
-                raceIdx: b.raceIdx,
                 raceNo: b.raceNo,
+                raceLabelStr: b.raceLabelStr,
                 type: b.type,
                 typeLabel: b.typeLabel,
                 selection: b.selection,
@@ -933,7 +1014,7 @@
         cart = [];
         renderCart();
         renderHistory();
-        flashResult("購入を確定しました。対象レースが確定すると自動的に払戻されます。", "win");
+        flashResult("購入を確定しました。発走時刻になると自動的に払戻されます。", "win");
     }
 
     /* =========================================================
@@ -958,7 +1039,7 @@
                 netText = (net >= 0 ? "+" : "") + net;
             }
             return `<tr>
-        <td>${rec.raceNo}R</td>
+        <td>${rec.raceLabelStr}</td>
         <td>${rec.typeLabel}</td>
         <td>${rec.selectionLabel}</td>
         <td>${rec.amount}</td>
@@ -996,11 +1077,10 @@
        ========================================================= */
 
     function renderAll() {
-        renderRaceTabs();
         renderRaceInfo();
         renderTrack();
         renderRaceControls();
-        renderResultPanel(races[activeRaceIdx]);
+        renderResultPanel(currentRace);
         renderEntryTable();
         renderBetTypeTabs();
         renderBetSlip();
@@ -1009,11 +1089,10 @@
         renderArchive();
     }
 
-    runRaceBtn.addEventListener("click", startRace);
     clearCartBtn.addEventListener("click", () => { cart = []; renderCart(); });
     confirmPurchaseBtn.addEventListener("click", confirmPurchase);
 
-    buildProgram();
     updateBalance(balance, false);
-    renderAll();
+    loadOrCreateRace(nextSlotFromNow());
+    setInterval(masterTick, 1000);
 })();
