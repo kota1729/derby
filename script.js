@@ -13,7 +13,7 @@
     ];
 
     const LANE_COUNT = 6;
-    let balance = 1000;
+    let balance = 100;
     let raceNo = 1;
     let horses = [];
     let selectedHorseId = null;
