@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>第一模擬競馬場 - DERBY SIM</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Shippori+Mincho:wght@500;700&family=Roboto+Mono:wght@500;700&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <div class="wrap">
+
+        <div class="banner">
+            <div>
+                <h1>第一模擬競馬場</h1>
+                <div class="sub">SIMULATED DERBY &mdash; 仮想チップのみ・実際の金銭は使用しません</div>
+                <div class="ticker"><span id="tickerText">単勝式シミュレーション ― 好きな馬にチップを賭けてレースの行方を見守ろう ― オッズは毎レース変動 ―
+                        単勝式シミュレーション ― 好きな馬にチップを賭けてレースの行方を見守ろう ― オッズは毎レース変動 ―</span></div>
+            </div>
+            <div class="balance-box">
+                <div class="label">所持チップ</div>
+                <div class="amount" id="balanceAmount">1000</div>
+            </div>
+        </div>
+
+        <div class="section-title">レース番号 <span class="race-no" id="raceNo">R.1</span></div>
+
+        <div class="track" id="track"></div>
+
+        <div class="result-banner" id="resultBanner"></div>
+
+        <div class="section-title">出走馬 &amp; オッズ<span style="flex:0;"></span></div>
+        <div class="bet-grid" id="betGrid"></div>
+
+        <div class="controls">
+            <div class="field">
+                <label>選択中の馬</label>
+                <div class="selected-name" id="selectedName">未選択</div>
+            </div>
+            <div class="field">
+                <label>賭け金 (チップ)</label>
+                <input type="number" id="betAmount" min="10" step="10" value="100">
+                <div class="chip-row">
+                    <button class="chip-btn" data-add="50">+50</button>
+                    <button class="chip-btn" data-add="100">+100</button>
+                    <button class="chip-btn" data-add="500">+500</button>
+                    <button class="chip-btn" data-max="1">最大</button>
+                </div>
+            </div>
+            <button class="primary" id="placeBetBtn">チップを賭ける</button>
+            <button class="primary" id="startRaceBtn" disabled>レース開始</button>
+            <button class="ghost" id="newRaceBtn" disabled>次のレースへ</button>
+            <div class="current-bet" id="currentBetInfo"></div>
+        </div>
+
+        <div class="section-title">払い戻し履歴</div>
+        <table>
+            <thead>
+                <tr>
+                    <th>R</th>
+                    <th>賭けた馬</th>
+                    <th>賭け金</th>
+                    <th>着順</th>
+                    <th>払戻</th>
+                    <th>収支</th>
+                </tr>
+            </thead>
+            <tbody id="historyBody">
+                <tr class="empty-row">
+                    <td colspan="6">まだレース履歴はありません</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <footer>ALL CHIPS ARE VIRTUAL &middot; NO REAL MONEY INVOLVED &middot; FOR ENTERTAINMENT ONLY</footer>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+
+</html>
