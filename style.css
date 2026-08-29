@@ -280,101 +280,142 @@ body {
     color: var(--parchment-dim);
 }
 
-/* ---------- Track ---------- */
+/* ---------- Track placeholder (発走前) ---------- */
+.track-placeholder {
+    margin-top: 14px;
+    border: 1px dashed rgba(201, 162, 39, .4);
+    border-radius: 8px;
+    padding: 34px 18px;
+    text-align: center;
+    font-family: 'Oswald', sans-serif;
+    letter-spacing: .06em;
+    font-size: 13px;
+    color: var(--parchment-dim);
+    background: rgba(21, 58, 40, .25);
+}
+
+/* ---------- Track (楕円周回コース) ---------- */
 .track {
     background: linear-gradient(180deg, var(--turf) 0%, #102a1c 100%);
     border: 1px solid var(--turf-line);
     border-radius: 8px;
-    padding: 14px 0;
+    padding: 16px;
     box-shadow: inset 0 0 40px rgba(0, 0, 0, .4), var(--shadow);
-    position: relative;
     margin-top: 14px;
-    max-height: 460px;
-    overflow-y: auto;
 }
 
-.lane {
-    position: relative;
-    height: 38px;
-    margin: 1px 0;
-    border-bottom: 1px dashed rgba(241, 231, 208, .12);
+.oval-panel {
     display: flex;
-    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+    align-items: stretch;
 }
 
-.lane:last-child {
-    border-bottom: none;
+.oval-wrap {
+    position: relative;
+    flex: 1 1 340px;
+    aspect-ratio: 600 / 260;
+    min-width: 260px;
 }
 
-.lane-num {
-    width: 30px;
-    flex: 0 0 30px;
+.oval-svg {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+}
+
+.oval-horses {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+}
+
+.lap-info {
+    margin-top: 10px;
     text-align: center;
-    font-family: 'Roboto Mono', monospace;
-    font-size: 11px;
+    font-family: 'Oswald', sans-serif;
+    font-size: 10px;
+    letter-spacing: .12em;
     color: var(--parchment-dim);
-    border-right: 1px solid rgba(241, 231, 208, .15);
-    height: 100%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
 }
 
-.lane-track {
-    position: relative;
-    flex: 1;
-    height: 100%;
-    margin-right: 58px;
+/* ---------- Live standings (実況中の順位) ---------- */
+.live-standings {
+    flex: 0 0 168px;
+    max-width: 100%;
+    max-height: 280px;
+    overflow-y: auto;
+    background: var(--board);
+    border: 1px solid rgba(201, 162, 39, .3);
+    border-radius: 6px;
+    padding: 8px;
 }
 
-.finish-line {
-    position: absolute;
-    right: -58px;
-    top: 0;
-    bottom: 0;
-    width: 6px;
-    background: repeating-linear-gradient(0deg, #fff 0 6px, #171310 6px 12px);
-    opacity: .85;
-}
-
-.finish-label {
-    position: absolute;
-    right: -52px;
-    top: -13px;
+.live-standings .lstitle {
     font-family: 'Oswald', sans-serif;
     font-size: 9px;
-    letter-spacing: .15em;
-    color: var(--parchment-dim);
+    letter-spacing: .18em;
+    color: var(--brass);
+    padding: 2px 4px 6px;
+}
+
+.standing-row {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 3px 4px;
+    border-bottom: 1px solid rgba(241, 231, 208, .06);
+}
+
+.standing-row .srank {
+    font-family: 'Roboto Mono', monospace;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--brass-bright);
+    width: 16px;
+    flex: 0 0 16px;
+}
+
+.standing-row .sname {
+    font-family: 'Roboto Mono', monospace;
+    font-size: 11px;
+    color: var(--parchment);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .horse {
     position: absolute;
     left: 0;
-    top: 50%;
-    transform: translate(0, -50%);
+    top: 0;
+    transform: translate(-50%, -50%);
     display: flex;
+    flex-direction: column;
     align-items: center;
-    gap: 5px;
-    transition: left .12s linear;
-    will-change: left;
+    gap: 1px;
+    transition: left .12s linear, top .12s linear;
+    will-change: left, top;
 }
 
 .horse .silhouette {
-    width: 38px;
-    height: 23px;
+    width: 30px;
+    height: 18px;
     display: block;
     overflow: visible;
 }
 
 .horse .tag {
     font-family: 'Roboto Mono', monospace;
-    font-size: 9px;
+    font-size: 8px;
     color: var(--ink);
     background: var(--parchment);
-    padding: 1px 4px;
+    padding: 0 4px;
     border-radius: 3px;
     white-space: nowrap;
     opacity: .9;
+    line-height: 1.5;
 }
 
 .horse.winner .tag {
@@ -1015,6 +1056,16 @@ input[type=number]:focus {
     padding: 20px;
     font-family: 'Shippori Mincho', serif;
     font-size: 13px;
+}
+
+.archive-empty {
+    text-align: center;
+    color: var(--parchment-dim);
+    padding: 20px;
+    font-family: 'Shippori Mincho', serif;
+    font-size: 13px;
+    border: 1px dashed rgba(201, 162, 39, .3);
+    border-radius: 6px;
 }
 
 footer {

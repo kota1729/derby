@@ -49,6 +49,15 @@
         "#b5253a", "#8892a8", "#a85fd1", "#4fb8a6", "#d6863c", "#6b6ed6", "#5fbf7a",
         "#c95fa0", "#7a9be0", "#d1a23f", "#5fa8d6"];
 
+    // 400m周回の楕円(スタジアム形)コースのジオメトリ(SVG viewBox 0 0 600 260 基準)
+    const TRACK_LAP_METERS = 400;
+    const TRACK_CX_LEFT = 190;
+    const TRACK_CX_RIGHT = 410;
+    const TRACK_CY = 130;
+    const TRACK_OUTER_R = 110;
+    const TRACK_INNER_R = 65;
+    const TRACK_CENTER_R = 88;
+
     /* =========================================================
        1. 状態
        ========================================================= */
@@ -60,6 +69,7 @@
     let currentSelection = []; // 馬番の配列(クリック順)
     let cart = []; // {raceIdx, raceNo, type, selection, amount, odds}
     let history = []; // 確定済み購入(結果反映後)
+    let selectedArchiveRaceNo = null;
 
     /* =========================================================
        2. DOM参照
@@ -70,6 +80,7 @@
     const raceTabsEl = $("raceTabs");
     const raceInfoEl = $("raceInfo");
     const trackEl = $("track");
+    const trackPlaceholderEl = $("trackPlaceholder");
     const runRaceBtn = $("runRaceBtn");
     const raceStatusMsgEl = $("raceStatusMsg");
     const resultBannerEl = $("resultBanner");
@@ -81,6 +92,8 @@
     const cartBodyEl = $("cartBody");
     const cartTotalEl = $("cartTotal");
     const historyBodyEl = $("historyBody");
+    const archiveListEl = $("archiveList");
+    const archiveDetailEl = $("archiveDetail");
     const clearCartBtn = $("clearCartBtn");
     const confirmPurchaseBtn = $("confirmPurchaseBtn");
 
@@ -329,27 +342,108 @@
     </svg>`;
     }
 
+    function stadiumPath(r) {
+        const yTop = TRACK_CY - r, yBot = TRACK_CY + r;
+        return `M${TRACK_CX_LEFT},${yTop} L${TRACK_CX_RIGHT},${yTop} A${r},${r} 0 0 1 ${TRACK_CX_RIGHT},${yBot} L${TRACK_CX_LEFT},${yBot} A${r},${r} 0 0 1 ${TRACK_CX_LEFT},${yTop} Z`;
+    }
+
+    // レースの周回情報(400m×何周か)。フィニッシュ地点は常に同じ場所(フラクション0)になるよう
+    // スタート地点側で調整する(距離によってゲート位置が変わる実際のコースに近い挙動)。
+    function trackGeometryFor(race) {
+        const totalLaps = race.distance / TRACK_LAP_METERS;
+        const startFrac = ((1 - (totalLaps % 1)) % 1 + 1) % 1;
+        const n = race.horses.length;
+        const spacing = Math.min(3.4, 34 / Math.max(1, n - 1));
+        return { totalLaps, startFrac, n, spacing };
+    }
+
+    function computeOvalPoint(centerlineEl, pathLen, geo, h, idx) {
+        const lapFrac = ((geo.startFrac + (h.pos / 100) * geo.totalLaps) % 1 + 1) % 1;
+        const L = lapFrac * pathLen;
+        const p = centerlineEl.getPointAtLength(L);
+        const p2 = centerlineEl.getPointAtLength((L + 1) % pathLen);
+        const dx = p2.x - p.x, dy = p2.y - p.y;
+        const mag = Math.sqrt(dx * dx + dy * dy) || 1;
+        const px = -dy / mag, py = dx / mag; // 進行方向に対する法線(横方向のレーンずらし用)
+        const offset = (idx - (geo.n - 1) / 2) * geo.spacing;
+        return { x: p.x + px * offset, y: p.y + py * offset };
+    }
+
+    function renderStandings(race) {
+        const el = document.getElementById("liveStandings");
+        if (!el) return;
+        const sorted = [...race.horses].sort((a, b) => b.pos - a.pos);
+        el.innerHTML = `<div class="lstitle">現在の順位</div>` + sorted.map((h, i) => `
+      <div class="standing-row"><span class="srank">${i + 1}</span><span class="sname">${h.number}.${h.name}</span></div>
+    `).join("");
+    }
+
     function renderTrack() {
         const race = races[activeRaceIdx];
-        trackEl.innerHTML = "";
+
+        if (race.status === "open") {
+            trackEl.style.display = "none";
+            trackPlaceholderEl.style.display = "block";
+            trackEl.innerHTML = "";
+            race.__trackCtx = null;
+            return;
+        }
+        trackPlaceholderEl.style.display = "none";
+        trackEl.style.display = "block";
+
+        const outerPath = stadiumPath(TRACK_OUTER_R);
+        const innerPath = stadiumPath(TRACK_INNER_R);
+        const centerPath = stadiumPath(TRACK_CENTER_R);
+        const finishX = TRACK_CX_LEFT;
+        const finishYTop = TRACK_CY - TRACK_OUTER_R;
+        const finishYBot = TRACK_CY - TRACK_INNER_R;
+
+        let horseMarkers = "";
         race.horses.forEach(h => {
-            const lane = document.createElement("div");
-            lane.className = "lane";
             const legDur = (0.62 - (h.strength - 0.6) * 0.22).toFixed(2);
-            const leftPct = race.status === "finished" ? Math.min(h.pos, 96) : 0;
-            lane.innerHTML = `
-        <div class="lane-num">${h.number}</div>
-        <div class="lane-track">
-          <div class="horse" id="horse-${h.number}" style="left:${leftPct}%; --leg-dur:${legDur}s;">
-            ${horseSvg(h.color)}
-            <span class="tag">${h.number}.${h.name}</span>
-          </div>
-          <div class="finish-line"></div>
-          ${h.number === 1 ? '<div class="finish-label">GOAL</div>' : ''}
-        </div>
-      `;
-            trackEl.appendChild(lane);
+            horseMarkers += `<div class="horse" id="horse-${h.number}" style="--leg-dur:${legDur}s;">
+        ${horseSvg(h.color)}
+        <span class="tag">${h.number}</span>
+      </div>`;
         });
+
+        const laps = race.distance / TRACK_LAP_METERS;
+
+        trackEl.innerHTML = `
+      <div class="oval-panel">
+        <div class="oval-wrap">
+          <svg class="oval-svg" viewBox="0 0 600 260" xmlns="http://www.w3.org/2000/svg">
+            <path d="${innerPath}" fill="#123322"></path>
+            <path d="${outerPath} ${innerPath}" fill-rule="evenodd" fill="#2a5e3d"></path>
+            <path d="${outerPath}" fill="none" stroke="#f1e7d0" stroke-opacity=".5" stroke-width="1.5"></path>
+            <path d="${innerPath}" fill="none" stroke="#f1e7d0" stroke-opacity=".5" stroke-width="1.5"></path>
+            <path id="centerlinePath" d="${centerPath}" fill="none" stroke="rgba(241,231,208,.15)" stroke-width="1" stroke-dasharray="3,5"></path>
+            <line x1="${finishX}" y1="${finishYTop}" x2="${finishX}" y2="${finishYBot}" stroke="#fff" stroke-width="4" stroke-dasharray="4,4"></line>
+            <text x="${finishX + 6}" y="${finishYTop + 10}" fill="#f1e7d0" font-size="11" font-family="Oswald, sans-serif" letter-spacing="1">GOAL</text>
+          </svg>
+          <div class="oval-horses" id="ovalHorses">${horseMarkers}</div>
+        </div>
+        <div class="live-standings" id="liveStandings"></div>
+      </div>
+      <div class="lap-info">1周 ${TRACK_LAP_METERS}m ・ 総距離 ${race.distance}m(${laps % 1 === 0 ? laps : laps.toFixed(1)}周)</div>
+    `;
+
+        const centerlineEl = document.getElementById("centerlinePath");
+        const pathLen = centerlineEl.getTotalLength();
+        const geo = trackGeometryFor(race);
+
+        race.horses.forEach((h, idx) => {
+            const pt = computeOvalPoint(centerlineEl, pathLen, geo, h, idx);
+            const el = document.getElementById(`horse-${h.number}`);
+            if (el) {
+                el.style.left = (pt.x / 600 * 100) + "%";
+                el.style.top = (pt.y / 260 * 100) + "%";
+                if (race.status === "finished") el.classList.add("finished");
+            }
+        });
+        renderStandings(race);
+
+        race.__trackCtx = { centerlineEl, pathLen, geo };
     }
 
     /* =========================================================
@@ -374,17 +468,21 @@
         resultPanelEl.innerHTML = "";
         raceStatusMsgEl.textContent = "発走しました…";
 
+        race.horses.forEach(h => { h.pos = 0; h.finished = false; h.finishOrder = null; });
+
+        renderTrack(); // 楕円コースと馬をスタート地点に初期配置
+
         race.horses.forEach(h => {
-            h.pos = 0; h.finished = false; h.finishOrder = null;
             const el = document.getElementById(`horse-${h.number}`);
             if (el) { el.classList.remove("finished", "winner"); el.classList.add("running"); }
         });
 
+        const ctx = race.__trackCtx;
         let finishedCount = 0;
         const orderObjs = [];
 
         const interval = setInterval(() => {
-            race.horses.forEach(h => {
+            race.horses.forEach((h, idx) => {
                 if (h.finished) return;
                 const jitter = Math.random() * 1.6;
                 h.pos += (h.strength * 1.05 + jitter);
@@ -397,8 +495,13 @@
                     orderObjs.push(h);
                     if (el) el.classList.remove("running");
                 }
-                if (el) el.style.left = Math.min(h.pos, 96) + "%";
+                if (ctx && el) {
+                    const pt = computeOvalPoint(ctx.centerlineEl, ctx.pathLen, ctx.geo, h, idx);
+                    el.style.left = (pt.x / 600 * 100) + "%";
+                    el.style.top = (pt.y / 260 * 100) + "%";
+                }
             });
+            renderStandings(race);
 
             if (finishedCount >= race.horses.length) {
                 clearInterval(interval);
@@ -428,11 +531,11 @@
             if (rec.raceIdx !== races.indexOf(race)) return;
             if (rec.settled) return;
             anyBetOnThisRace = true;
-            const { hit, payout } = evaluateBet(rec.type, rec.selection, race.result);
+            const { hit } = evaluateBet(rec.type, rec.selection, race.result);
             rec.settled = true;
             rec.hit = hit;
-            rec.payout = payout;
-            totalPayout += payout;
+            rec.payout = hit ? Math.round(rec.amount * rec.odds) : 0;
+            totalPayout += rec.payout;
         });
         if (totalPayout > 0) updateBalance(balance + totalPayout, true);
 
@@ -453,6 +556,8 @@
         renderRaceControls();
         renderEntryTable();
         renderBetSlip();
+        selectedArchiveRaceNo = race.raceNo;
+        renderArchive();
     }
 
     function evaluateBet(type, selection, order) {
@@ -492,8 +597,7 @@
         return rows;
     }
 
-    function renderResultPanel(race) {
-        if (race.status !== "finished") { resultPanelEl.innerHTML = ""; return; }
+    function buildResultHTML(race) {
         const byNum = {};
         race.horses.forEach(h => byNum[h.number] = h);
 
@@ -512,9 +616,9 @@
       <tr><td>${r.type}</td><td>${r.combo}</td><td>${r.odds.toFixed(1)}倍</td></tr>
     `).join("");
 
-        resultPanelEl.innerHTML = `
+        return `
       <div class="result-panel">
-        <h3>${race.raceNo}R 着順</h3>
+        <h3>${race.raceNo}R ${race.className}(${race.surface}${race.distance}m) 着順</h3>
         <table class="finish-table">
           <thead><tr><th>着順</th><th>枠</th><th>馬番</th><th>馬名</th><th>騎手</th></tr></thead>
           <tbody>${finishRows}</tbody>
@@ -526,6 +630,42 @@
         </table>
       </div>
     `;
+    }
+
+    function renderResultPanel(race) {
+        resultPanelEl.innerHTML = (race.status === "finished") ? buildResultHTML(race) : "";
+    }
+
+    function renderArchive() {
+        const finishedRaces = races.filter(r => r.status === "finished");
+        if (finishedRaces.length === 0) {
+            archiveListEl.innerHTML = `<div class="archive-empty">まだ確定したレースはありません</div>`;
+            archiveDetailEl.innerHTML = "";
+            return;
+        }
+        if (selectedArchiveRaceNo === null || !finishedRaces.some(r => r.raceNo === selectedArchiveRaceNo)) {
+            selectedArchiveRaceNo = finishedRaces[finishedRaces.length - 1].raceNo;
+        }
+
+        archiveListEl.innerHTML = "";
+        finishedRaces.forEach(race => {
+            const winner = race.horses.find(h => h.number === race.result[0]);
+            const div = document.createElement("div");
+            div.className = "race-tab" + (selectedArchiveRaceNo === race.raceNo ? " active" : "");
+            div.innerHTML = `
+        <div class="rno">${race.raceNo}R</div>
+        <div class="rtime">${race.postTime}発走</div>
+        <span class="rstatus finished">1着 ${winner.number}番</span>
+      `;
+            div.addEventListener("click", () => {
+                selectedArchiveRaceNo = race.raceNo;
+                renderArchive();
+            });
+            archiveListEl.appendChild(div);
+        });
+
+        const selectedRace = finishedRaces.find(r => r.raceNo === selectedArchiveRaceNo);
+        archiveDetailEl.innerHTML = buildResultHTML(selectedRace);
     }
 
     function renderRaceControls() {
@@ -866,6 +1006,7 @@
         renderBetSlip();
         renderCart();
         renderHistory();
+        renderArchive();
     }
 
     runRaceBtn.addEventListener("click", startRace);
