@@ -2,6 +2,21 @@
     "use strict";
 
     /* =========================================================
+       ▼▼▼ ここにSupabaseの接続情報を設定してください ▼▼▼
+       1. https://supabase.com で無料アカウント/プロジェクトを作成
+       2. プロジェクトの Settings → API から "Project URL" と "anon public key" を取得
+       3. 下の2つの値を書き換える(supabase_setup.sql をSQL Editorで実行しておくこと)
+       未設定のままでも通常のプレイ(1人用)は問題なく動作します。
+       ========================================================= */
+    const SUPABASE_URL = "https://vnpwavephmnvlccvvrcc.supabase.co"; // 例: https://xxxxxxxxxxxx.supabase.co
+    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZucHdhdmVwaG1udmxjY3Z2cmNjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgxMjIzMDIsImV4cCI6MjEwMzY5ODMwMn0.vtoWnfywI9riFGgc12_urFYl7oFQxVJzyiYatSIVQI4";
+
+    const supabaseConfigured = SUPABASE_URL.startsWith("https://") && SUPABASE_ANON_KEY && SUPABASE_ANON_KEY !== "YOUR_SUPABASE_ANON_KEY";
+    const supabaseClient = (supabaseConfigured && window.supabase)
+        ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+        : null;
+
+    /* =========================================================
        0. 定数・データプール
        ========================================================= */
 
@@ -74,6 +89,8 @@
     let cart = []; // {raceNo, raceLabelStr, type, selection, amount, odds}
     let history = []; // 確定済み購入(結果反映後)
     let selectedArchiveRaceNo = null;
+    let currentUser = null;      // Supabaseにログイン中のユーザー(未ログインならnull)
+    let currentDisplayName = ""; // ログイン中の表示名
     let raceAnimInterval = null;
 
     /* =========================================================
@@ -101,6 +118,20 @@
     const archiveDetailEl = $("archiveDetail");
     const clearCartBtn = $("clearCartBtn");
     const confirmPurchaseBtn = $("confirmPurchaseBtn");
+    const accountBox = $("accountBox");
+    const accountConfigMsg = $("accountConfigMsg");
+    const authForm = $("authForm");
+    const authEmail = $("authEmail");
+    const authPassword = $("authPassword");
+    const authName = $("authName");
+    const signInBtn = $("signInBtn");
+    const signUpBtn = $("signUpBtn");
+    const signOutBtn = $("signOutBtn");
+    const accountInfo = $("accountInfo");
+    const accountNameEl = $("accountName");
+    const accountStatusMsgEl = $("accountStatusMsg");
+    const rankingBodyEl = $("rankingBody");
+    const rankingMonthLabelEl = $("rankingMonthLabel");
 
     /* =========================================================
        3. ユーティリティ(決定論的な乱数・時刻表示)
@@ -643,6 +674,7 @@
         renderResultPanel(race);
         renderHistory();
         renderArchive();
+        syncSettledBetsToSupabase(race);
     }
 
     function evaluateBet(type, selection, order) {
@@ -1009,6 +1041,7 @@
                 settled: false,
                 hit: null,
                 payout: null,
+                synced: false,
             });
         });
         cart = [];
@@ -1073,7 +1106,194 @@
     }
 
     /* =========================================================
-       17. 初期化・全体レンダリング
+       17. アカウント(Supabase認証)・月間ランキング
+       ========================================================= */
+
+    function accountStatus(msg) {
+        if (accountStatusMsgEl) accountStatusMsgEl.textContent = msg || "";
+    }
+
+    function renderAccountUI() {
+        if (currentUser) {
+            authForm.style.display = "none";
+            accountInfo.style.display = "flex";
+            accountNameEl.textContent = currentDisplayName || currentUser.email;
+        } else {
+            authForm.style.display = "flex";
+            accountInfo.style.display = "none";
+        }
+    }
+
+    // 初回ログイン時にprofilesへ表示名を登録する(なければ作成、あれば取得)
+    async function ensureProfile(user, fallbackName) {
+        if (!supabaseClient) return "";
+        const { data, error } = await supabaseClient
+            .from("profiles")
+            .select("display_name")
+            .eq("id", user.id)
+            .maybeSingle();
+
+        if (!error && data && data.display_name) {
+            return data.display_name;
+        }
+
+        const name = (fallbackName && fallbackName.trim()) || user.email.split("@")[0];
+        const { error: upsertError } = await supabaseClient
+            .from("profiles")
+            .upsert({ id: user.id, display_name: name });
+        if (upsertError) {
+            console.error(upsertError);
+        }
+        return name;
+    }
+
+    async function handleSignUp() {
+        if (!supabaseClient) return;
+        const email = authEmail.value.trim();
+        const password = authPassword.value;
+        const name = authName.value.trim();
+        if (!email || password.length < 6) {
+            accountStatus("メールアドレスと6文字以上のパスワードを入力してください。");
+            return;
+        }
+        accountStatus("登録処理中…");
+        const { data, error } = await supabaseClient.auth.signUp({ email, password });
+        if (error) {
+            accountStatus("登録エラー: " + error.message);
+            return;
+        }
+        if (data.user) {
+            currentUser = data.user;
+            currentDisplayName = await ensureProfile(data.user, name);
+            renderAccountUI();
+            accountStatus(`ようこそ、${currentDisplayName}さん! 確認メールが届く設定の場合は、リンクを開いてから再度ログインしてください。`);
+            fetchRanking();
+        } else {
+            accountStatus("確認メールを送信しました。メール内のリンクを開いてから「ログイン」してください。");
+        }
+    }
+
+    async function handleSignIn() {
+        if (!supabaseClient) return;
+        const email = authEmail.value.trim();
+        const password = authPassword.value;
+        if (!email || !password) {
+            accountStatus("メールアドレスとパスワードを入力してください。");
+            return;
+        }
+        accountStatus("ログイン中…");
+        const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+        if (error) {
+            accountStatus("ログインエラー: " + error.message);
+            return;
+        }
+        currentUser = data.user;
+        currentDisplayName = await ensureProfile(data.user, authName.value.trim());
+        renderAccountUI();
+        accountStatus(`${currentDisplayName}さんとしてログインしました。`);
+        fetchRanking();
+    }
+
+    async function handleSignOut() {
+        if (!supabaseClient) return;
+        await supabaseClient.auth.signOut();
+        currentUser = null;
+        currentDisplayName = "";
+        renderAccountUI();
+        accountStatus("ログアウトしました。");
+    }
+
+    // レース確定後、そのレースで確定した(自分の)賭け結果を settle-bet Edge Function 経由で送信する。
+    // hit/payoutはこちらから送らず、サーバー側が race_slot から再計算した結果を信頼する。
+    async function syncSettledBetsToSupabase(race) {
+        if (!supabaseClient || !currentUser) return;
+        const pending = history.filter(rec => rec.raceNo === race.raceNo && rec.settled && !rec.synced);
+        if (pending.length === 0) return;
+
+        for (const rec of pending) {
+            rec.synced = true; // 二重送信防止のため先にフラグを立てる
+            try {
+                const { error } = await supabaseClient.functions.invoke("settle-bet", {
+                    body: {
+                        race_slot: new Date(race.slotStart).toISOString(),
+                        bet_type: rec.type,       // "win"などのキー(日本語ラベルではない)
+                        selection: rec.selection, // 馬番の配列(生の値)
+                        amount: rec.amount,
+                    },
+                });
+                if (error) {
+                    console.error("settle-bet error", error);
+                    rec.synced = false; // 失敗時は次回再送できるよう戻す
+                }
+            } catch (e) {
+                console.error("settle-bet exception", e);
+                rec.synced = false;
+            }
+        }
+        fetchRanking();
+    }
+
+    function currentMonthLabelJST() {
+        const now = new Date();
+        return now.toLocaleDateString('ja-JP', { timeZone: 'Asia/Tokyo', year: 'numeric', month: 'long' });
+    }
+
+    async function fetchRanking() {
+        if (rankingMonthLabelEl) rankingMonthLabelEl.textContent = currentMonthLabelJST();
+
+        if (!supabaseConfigured) {
+            accountConfigMsg.style.display = "block";
+            rankingBodyEl.innerHTML = `<tr class="empty-row"><td colspan="4">Supabase未設定のため、ランキングは利用できません(通常プレイは可能です)</td></tr>`;
+            return;
+        }
+        if (!supabaseClient) return;
+
+        const { data, error } = await supabaseClient.rpc("monthly_ranking");
+        if (error) {
+            rankingBodyEl.innerHTML = `<tr class="empty-row"><td colspan="4">ランキングの取得に失敗しました: ${error.message}</td></tr>`;
+            return;
+        }
+        const rows = (data || []).filter(r => r.bet_count > 0);
+        if (rows.length === 0) {
+            rankingBodyEl.innerHTML = `<tr class="empty-row"><td colspan="4">今月はまだ確定した賭けがありません</td></tr>`;
+            return;
+        }
+        rankingBodyEl.innerHTML = rows.map((r, i) => {
+            const rank = i + 1;
+            const badgeClass = rank === 1 ? "r1" : (rank === 2 ? "r2" : (rank === 3 ? "r3" : ""));
+            const netClass = r.net_total > 0 ? "pl-pos" : (r.net_total < 0 ? "pl-neg" : "pl-zero");
+            const netText = (r.net_total >= 0 ? "+" : "") + r.net_total;
+            return `<tr>
+        <td><span class="rank-badge ${badgeClass}">${rank}</span></td>
+        <td>${r.display_name}</td>
+        <td>${r.bet_count}</td>
+        <td class="${netClass}">${netText}</td>
+      </tr>`;
+        }).join("");
+    }
+
+    async function initAccount() {
+        if (!supabaseConfigured) {
+            accountConfigMsg.style.display = "block";
+            authForm.querySelectorAll("input,button").forEach(el => el.disabled = true);
+            fetchRanking();
+            return;
+        }
+        const { data } = await supabaseClient.auth.getSession();
+        if (data && data.session && data.session.user) {
+            currentUser = data.session.user;
+            currentDisplayName = await ensureProfile(currentUser, "");
+        }
+        renderAccountUI();
+        fetchRanking();
+    }
+
+    authForm.addEventListener("submit", (e) => { e.preventDefault(); handleSignIn(); });
+    signUpBtn.addEventListener("click", handleSignUp);
+    signOutBtn.addEventListener("click", handleSignOut);
+
+    /* =========================================================
+       18. 初期化・全体レンダリング
        ========================================================= */
 
     function renderAll() {
@@ -1095,4 +1315,5 @@
     updateBalance(balance, false);
     loadOrCreateRace(nextSlotFromNow());
     setInterval(masterTick, 1000);
+    initAccount();
 })();

@@ -184,6 +184,114 @@ body {
     letter-spacing: 0;
 }
 
+/* ---------- Account (ログイン/登録) ---------- */
+.account-box {
+    margin-top: 16px;
+    background: linear-gradient(180deg, #12261a, #0c1b12);
+    border: 1px solid rgba(201, 162, 39, .35);
+    border-radius: 6px;
+    padding: 14px 18px;
+}
+
+.account-msg {
+    font-family: 'Oswald', sans-serif;
+    font-size: 11px;
+    letter-spacing: .04em;
+    color: var(--parchment-dim);
+    margin-bottom: 10px;
+    line-height: 1.6;
+}
+
+.account-form {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.account-form input[type=email],
+.account-form input[type=password],
+.account-form input[type=text] {
+    background: var(--board);
+    border: 1px solid var(--brass);
+    color: var(--board-digit);
+    font-family: 'Roboto Mono', monospace;
+    font-size: 13px;
+    padding: 8px 10px;
+    border-radius: 4px;
+    flex: 1 1 160px;
+    min-width: 0;
+}
+
+.account-form input:focus {
+    outline: 2px solid var(--brass-bright);
+    outline-offset: 1px;
+}
+
+.account-info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    font-family: 'Oswald', sans-serif;
+    font-size: 13px;
+}
+
+.account-name {
+    color: var(--brass-bright);
+    font-weight: 600;
+}
+
+.account-hint {
+    color: var(--parchment-dim);
+    font-size: 12px;
+}
+
+.account-status {
+    margin-top: 8px;
+    font-family: 'Oswald', sans-serif;
+    font-size: 11px;
+    letter-spacing: .04em;
+    color: var(--parchment-dim);
+    min-height: 14px;
+}
+
+/* ---------- Ranking ---------- */
+.ranking-table-wrap {
+    overflow-x: auto;
+    background: linear-gradient(180deg, #12261a, #0c1b12);
+    border: 1px solid rgba(201, 162, 39, .3);
+    border-radius: 6px;
+}
+
+.rank-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    font-family: 'Oswald', sans-serif;
+    font-weight: 700;
+    font-size: 11px;
+    color: var(--parchment-dim);
+}
+
+.rank-badge.r1 {
+    background: var(--brass-bright);
+    color: #171310;
+}
+
+.rank-badge.r2 {
+    background: #c7c7c7;
+    color: #171310;
+}
+
+.rank-badge.r3 {
+    background: #c98a4b;
+    color: #171310;
+}
+
 /* ---------- Race tabs (番組表) ---------- */
 .race-tabs {
     display: flex;
