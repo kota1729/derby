@@ -8,8 +8,8 @@
        3. 下の2つの値を書き換える(supabase_setup.sql をSQL Editorで実行しておくこと)
        未設定のままでも通常のプレイ(1人用)は問題なく動作します。
        ========================================================= */
-    const SUPABASE_URL = "https://vnpwavephmnvlccvvrcc.supabase.co"; // 例: https://xxxxxxxxxxxx.supabase.co
-    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZucHdhdmVwaG1udmxjY3Z2cmNjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgxMjIzMDIsImV4cCI6MjEwMzY5ODMwMn0.vtoWnfywI9riFGgc12_urFYl7oFQxVJzyiYatSIVQI4";
+    const SUPABASE_URL = "YOUR_SUPABASE_URL"; // 例: https://xxxxxxxxxxxx.supabase.co
+    const SUPABASE_ANON_KEY = "YOUR_SUPABASE_ANON_KEY";
 
     const supabaseConfigured = SUPABASE_URL.startsWith("https://") && SUPABASE_ANON_KEY && SUPABASE_ANON_KEY !== "YOUR_SUPABASE_ANON_KEY";
     const supabaseClient = (supabaseConfigured && window.supabase)
@@ -375,24 +375,58 @@
         raceSeq += 1;
         currentRace = makeRace(raceSeq, slotStart);
         currentSelection = [];
-        cart = [];
+        if (cart.length > 0) {
+            cart = [];
+            flashResult("レースが切り替わったため、カート内の未購入の買い目は無効になりました。", "lose");
+        }
         renderAll();
     }
 
-    // 1秒ごとに呼ばれる時計係。発走時刻になったらレースを自動的に開始する。
-    function masterTick() {
-        if (!currentRace) return;
-        const race = currentRace;
-        if (race.status !== "open") return;
-
-        const now = Date.now();
-        const remain = race.slotStart - now;
-        if (remain <= 0) {
-            beginRaceAnimation(race);
-        } else {
-            updatePostTimeCountdown(remain, race);
+    // タブが非表示/スリープ等でJSタイマーが止まっていた場合、見逃した分を
+    // アニメーションなしで即座に精算し、常に「今」の状態に復元する。
+    function settleMissedRace(race) {
+        if (cart.length > 0) {
+            cart = [];
+            flashResult("レースが切り替わったため、カート内の未購入の買い目は無効になりました。", "lose");
         }
+        concludeRace(race); // race.actualFinishOrder は生成時点で確定済みなので、実況なしでも精算できる
+        loadOrCreateRace(nextSlotFromNow());
     }
+
+    // 1秒ごと、および画面がアクティブに戻った瞬間に呼ばれる時計係。
+    // 「閉じていた/バックグラウンドだった間の経過時間」を毎回きちんと計算し直すことで、
+    // 何時に開いても必ず実時刻に基づいた状態になるようにする。
+    function resyncToRealTime() {
+        if (!currentRace) { loadOrCreateRace(nextSlotFromNow()); return; }
+        const race = currentRace;
+        const now = Date.now();
+
+        if (race.status === "open") {
+            const elapsed = now - race.slotStart;
+            if (elapsed < 0) {
+                updatePostTimeCountdown(-elapsed, race);
+            } else if (elapsed < race.totalAnimMs) {
+                beginRaceAnimation(race, elapsed); // 経過時間ぶん早送りしてアニメーションを再開
+            } else {
+                // 発走・レース時間ともに過ぎているのに気づけなかった(タブが長時間非アクティブだった)
+                settleMissedRace(race);
+            }
+        } else if (race.status === "finished") {
+            // 通常は finishRace 内で即座に次のレースが用意されるが、念のための保険
+            loadOrCreateRace(nextSlotFromNow());
+        }
+        // "running" のときは実況用のタイマーが自然に追いつくのでここでは何もしない
+    }
+
+    function masterTick() {
+        resyncToRealTime();
+    }
+
+    document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "visible") resyncToRealTime();
+    });
+    window.addEventListener("focus", resyncToRealTime);
+    window.addEventListener("pageshow", resyncToRealTime);
 
     function updatePostTimeCountdown(remainMs, race) {
         if (!cooldownBoxEl) return;
@@ -570,7 +604,8 @@
        9. レース実況(発走時刻に自動開始) ― 実際のレースタイムに近い速度で進行
        ========================================================= */
 
-    function beginRaceAnimation(race) {
+    function beginRaceAnimation(race, elapsedOffset) {
+        elapsedOffset = elapsedOffset || 0;
         race.status = "running";
         hideResult();
         resultPanelEl.innerHTML = "";
@@ -593,7 +628,7 @@
         });
 
         const ctx = race.__trackCtx;
-        const raceStartAt = performance.now();
+        const raceStartAt = performance.now() - elapsedOffset;
         let finishedCount = 0;
 
         if (raceAnimInterval) clearInterval(raceAnimInterval);
@@ -893,7 +928,8 @@
     function renderBetSlip() {
         const race = currentRace;
         const def = BET_TYPES[currentBetType];
-        const disabled = race.status !== "open";
+        const notLoggedIn = !currentUser;
+        const disabled = race.status !== "open" || notLoggedIn;
 
         let slotsHtml = "";
         if (def.ordered) {
@@ -918,12 +954,17 @@
         const complete = currentSelection.length === def.picks;
         let oddsHtml = `<span style="color:var(--parchment-dim); font-size:13px;">馬番を${def.picks}頭選択してください</span>`;
         let odds = null;
-        if (complete && !disabled) {
+        if (complete && race.status === "open") {
             odds = estimateOdds(race, currentBetType, currentSelection);
             oddsHtml = `<span class="slip-odds">${odds.toFixed(1)}<span class="suf">倍(予想)</span></span>`;
         }
 
+        const loginNotice = notLoggedIn
+            ? `<div class="login-required-notice">投票には上のフォームからログイン(または新規登録)が必要です。</div>`
+            : "";
+
         betSlipEl.innerHTML = `
+      ${loginNotice}
       <div class="slip-picks">${slotsHtml}</div>
       <div class="slip-field">
         <label>予想オッズ</label>
@@ -958,6 +999,11 @@
     function addToCart(odds) {
         const race = currentRace;
         const def = BET_TYPES[currentBetType];
+
+        if (!currentUser) {
+            flashResult("投票にはログインが必要です。上のフォームからログイン/新規登録してください。", "lose");
+            return;
+        }
         const amountInput = $("slipAmount");
         const amount = Math.floor(Number(amountInput.value));
 
@@ -1021,6 +1067,10 @@
     }
 
     function confirmPurchase() {
+        if (!currentUser) {
+            flashResult("投票にはログインが必要です。上のフォームからログイン/新規登録してください。", "lose");
+            return;
+        }
         const total = cart.reduce((s, b) => s + b.amount, 0);
         if (total === 0) return;
         if (total > balance) {
@@ -1166,6 +1216,8 @@
             currentUser = data.user;
             currentDisplayName = await ensureProfile(data.user, name);
             renderAccountUI();
+            renderEntryTable();
+            renderBetSlip();
             accountStatus(`ようこそ、${currentDisplayName}さん! 確認メールが届く設定の場合は、リンクを開いてから再度ログインしてください。`);
             fetchRanking();
         } else {
@@ -1190,6 +1242,8 @@
         currentUser = data.user;
         currentDisplayName = await ensureProfile(data.user, authName.value.trim());
         renderAccountUI();
+        renderEntryTable();
+        renderBetSlip();
         accountStatus(`${currentDisplayName}さんとしてログインしました。`);
         fetchRanking();
     }
@@ -1199,7 +1253,10 @@
         await supabaseClient.auth.signOut();
         currentUser = null;
         currentDisplayName = "";
+        currentSelection = [];
         renderAccountUI();
+        renderEntryTable();
+        renderBetSlip();
         accountStatus("ログアウトしました。");
     }
 
@@ -1283,6 +1340,8 @@
         if (data && data.session && data.session.user) {
             currentUser = data.session.user;
             currentDisplayName = await ensureProfile(currentUser, "");
+            renderEntryTable();
+            renderBetSlip();
         }
         renderAccountUI();
         fetchRanking();
@@ -1291,6 +1350,18 @@
     authForm.addEventListener("submit", (e) => { e.preventDefault(); handleSignIn(); });
     signUpBtn.addEventListener("click", handleSignUp);
     signOutBtn.addEventListener("click", handleSignOut);
+
+    if (supabaseClient) {
+        supabaseClient.auth.onAuthStateChange((_event, session) => {
+            const wasLoggedIn = !!currentUser;
+            const nowLoggedIn = !!(session && session.user);
+            if (wasLoggedIn === nowLoggedIn && (!nowLoggedIn || currentUser.id === session.user.id)) return;
+            currentUser = nowLoggedIn ? session.user : null;
+            if (!nowLoggedIn) currentDisplayName = "";
+            renderAccountUI();
+            if (currentRace) { renderEntryTable(); renderBetSlip(); }
+        });
+    }
 
     /* =========================================================
        18. 初期化・全体レンダリング

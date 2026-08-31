@@ -1095,6 +1095,19 @@ button.ghost:disabled {
     margin-left: 2px;
 }
 
+.login-required-notice {
+    width: 100%;
+    background: rgba(124, 37, 48, .18);
+    border: 1px solid var(--maroon);
+    color: #e2a9af;
+    font-family: 'Oswald', sans-serif;
+    font-size: 12px;
+    letter-spacing: .04em;
+    padding: 10px 14px;
+    border-radius: 5px;
+    margin-bottom: 4px;
+}
+
 input[type=number] {
     background: var(--board);
     border: 1px solid var(--brass);
@@ -1243,13 +1256,155 @@ footer {
     }
 }
 
+/* ---------- タブレット幅 ---------- */
+@media (max-width: 900px) {
+    .oval-wrap {
+        flex: 1 1 100%;
+    }
+
+    .live-standings {
+        flex: 1 1 100%;
+        max-height: 220px;
+    }
+}
+
+/* ---------- スマートフォン幅 ---------- */
 @media (max-width: 640px) {
-    .bet-slip {
+    body {
+        padding: 16px 10px 48px;
+    }
+
+    .banner {
+        padding: 14px 16px;
+        gap: 12px;
+    }
+
+    .banner .sub {
+        font-size: 9px;
+        letter-spacing: .12em;
+    }
+
+    .balance-box {
+        min-width: 0;
+        width: 100%;
+        text-align: left;
+        padding: 8px 14px;
+    }
+
+    .balance-box .amount {
+        font-size: 22px;
+    }
+
+    .section-title {
+        font-size: 11px;
+        margin: 26px 0 10px;
+    }
+
+    .race-info {
+        flex-direction: column;
+        gap: 4px;
+        padding: 12px 14px;
+    }
+
+    .account-box {
+        padding: 12px 14px;
+    }
+
+    .account-form {
         flex-direction: column;
         align-items: stretch;
     }
 
+    .account-form input,
+    .account-form button {
+        width: 100%;
+    }
+
+    .account-info {
+        justify-content: space-between;
+    }
+
+    .bet-type-tabs {
+        gap: 6px;
+    }
+
+    .bet-type-tab {
+        padding: 8px 12px;
+        font-size: 11px;
+    }
+
+    .bet-slip {
+        flex-direction: column;
+        align-items: stretch;
+        padding: 14px;
+    }
+
+    .slip-picks {
+        justify-content: center;
+    }
+
+    .pick-slot {
+        min-width: 50px;
+        min-height: 36px;
+        padding: 3px 6px;
+    }
+
+    .bet-slip input[type=number] {
+        width: 100%;
+    }
+
+    .bet-slip button.primary {
+        width: 100%;
+    }
+
+    .cart-actions {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+    }
+
     .cart-total {
         margin-left: 0;
+        text-align: center;
+    }
+
+    .cart-actions button {
+        width: 100%;
+    }
+
+    .entry-table,
+    .cart-table,
+    .finish-table,
+    .payout-table {
+        font-size: 11px;
+    }
+
+    .horse .tag {
+        font-size: 7px;
+    }
+
+    .lane-num,
+    .waku {
+        font-size: 10px;
+    }
+
+    .cooldown-label {
+        font-size: 11px;
+    }
+}
+
+/* ---------- 特に幅の狭い端末 ---------- */
+@media (max-width: 380px) {
+    .banner h1 {
+        font-size: 19px;
+    }
+
+    .balance-box .amount {
+        font-size: 20px;
+    }
+
+    .race-tab {
+        min-width: 68px;
+        padding: 6px 8px;
     }
 }
