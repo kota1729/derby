@@ -8,8 +8,8 @@
        3. 下の2つの値を書き換える(supabase_setup.sql をSQL Editorで実行しておくこと)
        未設定のままでも通常のプレイ(1人用)は問題なく動作します。
        ========================================================= */
-    const SUPABASE_URL = "YOUR_SUPABASE_URL"; // 例: https://xxxxxxxxxxxx.supabase.co
-    const SUPABASE_ANON_KEY = "YOUR_SUPABASE_ANON_KEY";
+    const SUPABASE_URL = "https://vnpwavephmnvlccvvrcc.supabase.co"; // 例: https://xxxxxxxxxxxx.supabase.co
+    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZucHdhdmVwaG1udmxjY3Z2cmNjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgxMjIzMDIsImV4cCI6MjEwMzY5ODMwMn0.vtoWnfywI9riFGgc12_urFYl7oFQxVJzyiYatSIVQI4";
 
     const supabaseConfigured = SUPABASE_URL.startsWith("https://") && SUPABASE_ANON_KEY && SUPABASE_ANON_KEY !== "YOUR_SUPABASE_ANON_KEY";
     const supabaseClient = (supabaseConfigured && window.supabase)
