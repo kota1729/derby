@@ -184,6 +184,99 @@ body {
     letter-spacing: 0;
 }
 
+/* ---------- Auth gate (表示名を決めるまでの全画面ブロック) ---------- */
+.auth-gate {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    background: radial-gradient(ellipse at top, #163826 0%, #08130d 70%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+
+.auth-gate-card {
+    background: linear-gradient(180deg, #12261a, #0c1b12);
+    border: 1px solid var(--brass);
+    border-radius: 10px;
+    box-shadow: var(--shadow);
+    padding: 32px 28px;
+    max-width: 380px;
+    width: 100%;
+    text-align: center;
+}
+
+.auth-gate-logo {
+    font-size: 40px;
+    margin-bottom: 6px;
+}
+
+.auth-gate-card h2 {
+    font-family: 'Oswald', sans-serif;
+    font-weight: 600;
+    letter-spacing: .04em;
+    font-size: 19px;
+    color: var(--brass-bright);
+    margin: 6px 0 10px;
+}
+
+.auth-gate-card p {
+    font-family: 'Shippori Mincho', serif;
+    font-size: 13px;
+    line-height: 1.7;
+    color: var(--parchment-dim);
+    margin: 0 0 20px;
+}
+
+.auth-gate-card input[type=text],
+.auth-gate-card input[type=password] {
+    width: 100%;
+    background: var(--board);
+    border: 1px solid var(--brass);
+    color: var(--board-digit);
+    font-family: 'Roboto Mono', monospace;
+    font-size: 16px;
+    padding: 12px 14px;
+    border-radius: 5px;
+    margin-bottom: 12px;
+}
+
+.auth-gate-card input[type=text]:focus,
+.auth-gate-card input[type=password]:focus {
+    outline: 2px solid var(--brass-bright);
+    outline-offset: 1px;
+}
+
+.auth-gate-btn-row {
+    display: flex;
+    gap: 10px;
+    margin-top: 4px;
+}
+
+.auth-gate-btn-row button {
+    flex: 1;
+    padding: 12px 14px;
+    font-size: 13px;
+}
+
+.auth-gate-status {
+    min-height: 16px;
+    margin-top: 12px;
+    font-family: 'Oswald', sans-serif;
+    font-size: 11px;
+    color: #e2a9af;
+}
+
+.auth-gate-note {
+    margin-top: 16px;
+    font-family: 'Oswald', sans-serif;
+    font-size: 9px;
+    letter-spacing: .04em;
+    line-height: 1.6;
+    color: rgba(241, 231, 208, .45);
+}
+
 /* ---------- Account (ログイン/登録) ---------- */
 .account-box {
     margin-top: 16px;

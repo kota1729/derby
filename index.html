@@ -15,6 +15,28 @@
 </head>
 
 <body>
+
+    <!-- ===== 認証ゲート: ユーザーID+パスワードでログイン/新規登録するまで先に進めない ===== -->
+    <div class="auth-gate" id="authGate">
+        <div class="auth-gate-card">
+            <div class="auth-gate-logo">🏇</div>
+            <h2>模擬Web投票へようこそ</h2>
+            <p>ユーザーIDとパスワードを決めてください。<br>メールアドレスは不要です。</p>
+            <input type="text" id="gateUserId" placeholder="ユーザーID(英数字とアンダースコア 3〜20文字)" maxlength="20"
+                autocomplete="username">
+            <input type="password" id="gatePassword" placeholder="パスワード(6文字以上)" autocomplete="current-password"
+                minlength="6">
+            <div class="auth-gate-btn-row">
+                <button class="ghost" id="gateLoginBtn">ログイン</button>
+                <button class="primary" id="gateSignupBtn">新規登録</button>
+            </div>
+            <div class="auth-gate-status" id="authGateStatus"></div>
+            <div class="auth-gate-note">
+                ※ このユーザーID・パスワードがあれば、どの端末・どのブラウザからでも同じ記録に入れます。
+            </div>
+        </div>
+    </div>
+
     <div class="wrap">
 
         <!-- ===== ヘッダー ===== -->
@@ -33,25 +55,17 @@
             </div>
         </div>
 
-        <!-- ===== アカウント(Supabase未設定の場合は非表示メッセージ) ===== -->
-        <div class="account-box" id="accountBox">
+        <!-- ===== アカウント状態バー(ゲート通過後に表示) ===== -->
+        <div class="account-box" id="accountBox" style="display:none;">
             <div class="account-msg" id="accountConfigMsg" style="display:none;">
                 ランキング機能を使うには script.js 冒頭の SUPABASE_URL / SUPABASE_ANON_KEY を設定してください(未設定でも通常プレイは可能です)。
             </div>
-            <form class="account-form" id="authForm">
-                <input type="email" id="authEmail" placeholder="メールアドレス" autocomplete="email" required>
-                <input type="password" id="authPassword" placeholder="パスワード(6文字以上)" autocomplete="current-password"
-                    required minlength="6">
-                <input type="text" id="authName" placeholder="表示名(初回登録時のみ)" maxlength="20">
-                <button type="submit" class="ghost" id="signInBtn">ログイン</button>
-                <button type="button" class="primary" id="signUpBtn">新規登録</button>
-            </form>
-            <div class="account-info" id="accountInfo" style="display:none;">
+            <div class="account-info" id="accountInfo">
                 <span class="account-name" id="accountName"></span>
-                <span class="account-hint">の記録としてランキングに参加中</span>
-                <button class="ghost" id="signOutBtn">ログアウト</button>
+                <span class="account-hint">としてプレイ中</span>
+                <button class="ghost" id="renameBtn">表示名を変更</button>
+                <button class="ghost" id="signOutBtn">別の人として始める</button>
             </div>
-            <div class="account-status" id="accountStatusMsg"></div>
         </div>
 
         <!-- ===== 月間ランキング ===== -->

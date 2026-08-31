@@ -8,13 +8,23 @@
        3. 下の2つの値を書き換える(supabase_setup.sql をSQL Editorで実行しておくこと)
        未設定のままでも通常のプレイ(1人用)は問題なく動作します。
        ========================================================= */
-    const SUPABASE_URL = "https://vnpwavephmnvlccvvrcc.supabase.co"; // 例: https://xxxxxxxxxxxx.supabase.co
-    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZucHdhdmVwaG1udmxjY3Z2cmNjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgxMjIzMDIsImV4cCI6MjEwMzY5ODMwMn0.vtoWnfywI9riFGgc12_urFYl7oFQxVJzyiYatSIVQI4";
+    const SUPABASE_URL = "YOUR_SUPABASE_URL"; // 例: https://xxxxxxxxxxxx.supabase.co
+    const SUPABASE_ANON_KEY = "YOUR_SUPABASE_ANON_KEY";
 
     const supabaseConfigured = SUPABASE_URL.startsWith("https://") && SUPABASE_ANON_KEY && SUPABASE_ANON_KEY !== "YOUR_SUPABASE_ANON_KEY";
     const supabaseClient = (supabaseConfigured && window.supabase)
         ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
         : null;
+
+    // ユーザーID+パスワード方式(メールアドレス不要)のための設定。
+    // Supabase Authは内部的にメールアドレス形式を要求するため、
+    // ユーザーIDを「実在しないダミードメイン(.invalidはRFC2606で予約された特殊用途ドメイン)」
+    // と組み合わせた疑似メールアドレスとして扱う。画面上にメールは一切表示されない。
+    const USERNAME_EMAIL_DOMAIN = "@users.invalid";
+    const USERNAME_PATTERN = /^[A-Za-z0-9_]{3,20}$/;
+    function usernameToEmail(username) {
+        return username.toLowerCase() + USERNAME_EMAIL_DOMAIN;
+    }
 
     /* =========================================================
        0. 定数・データプール
@@ -120,16 +130,16 @@
     const confirmPurchaseBtn = $("confirmPurchaseBtn");
     const accountBox = $("accountBox");
     const accountConfigMsg = $("accountConfigMsg");
-    const authForm = $("authForm");
-    const authEmail = $("authEmail");
-    const authPassword = $("authPassword");
-    const authName = $("authName");
-    const signInBtn = $("signInBtn");
-    const signUpBtn = $("signUpBtn");
-    const signOutBtn = $("signOutBtn");
     const accountInfo = $("accountInfo");
     const accountNameEl = $("accountName");
-    const accountStatusMsgEl = $("accountStatusMsg");
+    const renameBtn = $("renameBtn");
+    const signOutBtn = $("signOutBtn");
+    const authGateEl = $("authGate");
+    const gateUserId = $("gateUserId");
+    const gatePassword = $("gatePassword");
+    const gateLoginBtn = $("gateLoginBtn");
+    const gateSignupBtn = $("gateSignupBtn");
+    const authGateStatusEl = $("authGateStatus");
     const rankingBodyEl = $("rankingBody");
     const rankingMonthLabelEl = $("rankingMonthLabel");
 
@@ -1156,108 +1166,158 @@
     }
 
     /* =========================================================
-       17. アカウント(Supabase認証)・月間ランキング
+       17. アカウント(Supabase匿名認証+表示名)・月間ランキング
        ========================================================= */
 
-    function accountStatus(msg) {
-        if (accountStatusMsgEl) accountStatusMsgEl.textContent = msg || "";
+    function showAuthGate() {
+        authGateEl.style.display = "flex";
+        accountBox.style.display = "none";
+        gateUserId.value = "";
+        gatePassword.value = "";
+        authGateStatusEl.textContent = "";
+        setGateBusy(false);
+        setTimeout(() => gateUserId.focus(), 50);
+    }
+
+    function hideAuthGate() {
+        authGateEl.style.display = "none";
+        accountBox.style.display = "block";
+    }
+
+    function setGateBusy(busy, msg) {
+        gateLoginBtn.disabled = busy;
+        gateSignupBtn.disabled = busy;
+        if (msg !== undefined) authGateStatusEl.textContent = msg;
     }
 
     function renderAccountUI() {
-        if (currentUser) {
-            authForm.style.display = "none";
-            accountInfo.style.display = "flex";
-            accountNameEl.textContent = currentDisplayName || currentUser.email;
-        } else {
-            authForm.style.display = "flex";
-            accountInfo.style.display = "none";
-        }
+        accountNameEl.textContent = currentDisplayName || "プレイヤー";
     }
 
-    // 初回ログイン時にprofilesへ表示名を登録する(なければ作成、あれば取得)
-    async function ensureProfile(user, fallbackName) {
-        if (!supabaseClient) return "";
+    // profilesから表示名だけを取得する(無ければnull)
+    async function fetchProfileName(userId) {
         const { data, error } = await supabaseClient
             .from("profiles")
             .select("display_name")
-            .eq("id", user.id)
+            .eq("id", userId)
             .maybeSingle();
-
-        if (!error && data && data.display_name) {
-            return data.display_name;
-        }
-
-        const name = (fallbackName && fallbackName.trim()) || user.email.split("@")[0];
-        const { error: upsertError } = await supabaseClient
-            .from("profiles")
-            .upsert({ id: user.id, display_name: name });
-        if (upsertError) {
-            console.error(upsertError);
-        }
-        return name;
+        if (error || !data) return null;
+        return data.display_name || null;
     }
 
-    async function handleSignUp() {
-        if (!supabaseClient) return;
-        const email = authEmail.value.trim();
-        const password = authPassword.value;
-        const name = authName.value.trim();
-        if (!email || password.length < 6) {
-            accountStatus("メールアドレスと6文字以上のパスワードを入力してください。");
-            return;
-        }
-        accountStatus("登録処理中…");
-        const { data, error } = await supabaseClient.auth.signUp({ email, password });
-        if (error) {
-            accountStatus("登録エラー: " + error.message);
-            return;
-        }
-        if (data.user) {
-            currentUser = data.user;
-            currentDisplayName = await ensureProfile(data.user, name);
-            renderAccountUI();
-            renderEntryTable();
-            renderBetSlip();
-            accountStatus(`ようこそ、${currentDisplayName}さん! 確認メールが届く設定の場合は、リンクを開いてから再度ログインしてください。`);
-            fetchRanking();
-        } else {
-            accountStatus("確認メールを送信しました。メール内のリンクを開いてから「ログイン」してください。");
-        }
-    }
-
-    async function handleSignIn() {
-        if (!supabaseClient) return;
-        const email = authEmail.value.trim();
-        const password = authPassword.value;
-        if (!email || !password) {
-            accountStatus("メールアドレスとパスワードを入力してください。");
-            return;
-        }
-        accountStatus("ログイン中…");
-        const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
-        if (error) {
-            accountStatus("ログインエラー: " + error.message);
-            return;
-        }
-        currentUser = data.user;
-        currentDisplayName = await ensureProfile(data.user, authName.value.trim());
+    function finishGateSuccess() {
+        hideAuthGate();
         renderAccountUI();
         renderEntryTable();
         renderBetSlip();
-        accountStatus(`${currentDisplayName}さんとしてログインしました。`);
         fetchRanking();
     }
 
-    async function handleSignOut() {
-        if (!supabaseClient) return;
-        await supabaseClient.auth.signOut();
+    // 新規登録: ユーザーID+パスワードだけでアカウントを作る。
+    // メールアドレスの代わりに「ユーザーID@ダミードメイン」の疑似メールをSupabase内部でのみ使う。
+    async function handleGateSignup() {
+        const username = gateUserId.value.trim();
+        const password = gatePassword.value;
+
+        if (!USERNAME_PATTERN.test(username)) {
+            authGateStatusEl.textContent = "ユーザーIDは英数字とアンダースコアのみ、3〜20文字で入力してください。";
+            return;
+        }
+        if (password.length < 6) {
+            authGateStatusEl.textContent = "パスワードは6文字以上で入力してください。";
+            return;
+        }
+        setGateBusy(true, "登録処理中…");
+
+        try {
+            const { data, error } = await supabaseClient.auth.signUp({
+                email: usernameToEmail(username),
+                password,
+            });
+            if (error) {
+                authGateStatusEl.textContent = /registered|exists/i.test(error.message)
+                    ? "そのユーザーIDは既に使われています。ログインをお試しください。"
+                    : "登録エラー: " + error.message;
+                setGateBusy(false);
+                return;
+            }
+            if (!data.user) {
+                authGateStatusEl.textContent = "登録に失敗しました。時間をおいて再度お試しください。";
+                setGateBusy(false);
+                return;
+            }
+            const { error: upsertError } = await supabaseClient
+                .from("profiles")
+                .upsert({ id: data.user.id, display_name: username });
+            if (upsertError) {
+                authGateStatusEl.textContent = "エラー: " + upsertError.message;
+                setGateBusy(false);
+                return;
+            }
+            currentUser = data.user;
+            currentDisplayName = username;
+            finishGateSuccess();
+        } catch (e) {
+            authGateStatusEl.textContent = "エラー: " + String(e);
+            setGateBusy(false);
+        }
+    }
+
+    // ログイン: 既存のユーザーID+パスワードで、どの端末からでも同じアカウントに入れる。
+    async function handleGateLogin() {
+        const username = gateUserId.value.trim();
+        const password = gatePassword.value;
+        if (!username || !password) {
+            authGateStatusEl.textContent = "ユーザーIDとパスワードを入力してください。";
+            return;
+        }
+        setGateBusy(true, "ログイン中…");
+
+        try {
+            const { data, error } = await supabaseClient.auth.signInWithPassword({
+                email: usernameToEmail(username),
+                password,
+            });
+            if (error) {
+                authGateStatusEl.textContent = "ユーザーIDまたはパスワードが正しくありません。";
+                setGateBusy(false);
+                return;
+            }
+            currentUser = data.user;
+            currentDisplayName = (await fetchProfileName(data.user.id)) || username;
+            finishGateSuccess();
+        } catch (e) {
+            authGateStatusEl.textContent = "エラー: " + String(e);
+            setGateBusy(false);
+        }
+    }
+
+    // 「別の人として始める」: この端末で今ログイン中のアカウントからログアウトし、
+    // 別のユーザーID・パスワードでログイン/新規登録し直せるようゲートを出し直す。
+    async function handleSwitchPerson() {
+        if (supabaseClient) await supabaseClient.auth.signOut();
         currentUser = null;
         currentDisplayName = "";
         currentSelection = [];
-        renderAccountUI();
         renderEntryTable();
         renderBetSlip();
-        accountStatus("ログアウトしました。");
+        showAuthGate();
+    }
+
+    // 表示名(ランキングに出る名前)だけを変更する。ログイン用のユーザーID・パスワードには影響しない。
+    async function handleRenameClick() {
+        if (!currentUser) return;
+        const name = window.prompt("新しい表示名を入力してください(ランキングに表示されます)", currentDisplayName || "");
+        if (!name || !name.trim()) return;
+        const { error } = await supabaseClient.from("profiles").upsert({ id: currentUser.id, display_name: name.trim() });
+        if (error) {
+            flashResult("表示名の変更に失敗しました: " + error.message, "lose");
+            return;
+        }
+        currentDisplayName = name.trim();
+        renderAccountUI();
+        fetchRanking();
+        flashResult("表示名を変更しました。", "win");
     }
 
     // レース確定後、そのレースで確定した(自分の)賭け結果を settle-bet Edge Function 経由で送信する。
@@ -1300,7 +1360,7 @@
 
         if (!supabaseConfigured) {
             accountConfigMsg.style.display = "block";
-            rankingBodyEl.innerHTML = `<tr class="empty-row"><td colspan="4">Supabase未設定のため、ランキングは利用できません(通常プレイは可能です)</td></tr>`;
+            rankingBodyEl.innerHTML = `<tr class="empty-row"><td colspan="4">Supabase未設定のため、ランキングは利用できません</td></tr>`;
             return;
         }
         if (!supabaseClient) return;
@@ -1329,39 +1389,43 @@
         }).join("");
     }
 
+    // 起動時: Supabase未設定なら通常プレイのみ(ゲートは出さない)。
+    // 設定済みなら、既存の匿名セッション+表示名が確認できるまでゲートで先へ進ませない。
     async function initAccount() {
         if (!supabaseConfigured) {
             accountConfigMsg.style.display = "block";
-            authForm.querySelectorAll("input,button").forEach(el => el.disabled = true);
+            authGateEl.style.display = "none";
             fetchRanking();
             return;
         }
-        const { data } = await supabaseClient.auth.getSession();
-        if (data && data.session && data.session.user) {
-            currentUser = data.session.user;
-            currentDisplayName = await ensureProfile(currentUser, "");
-            renderEntryTable();
-            renderBetSlip();
+        try {
+            const { data } = await supabaseClient.auth.getSession();
+            if (data && data.session && data.session.user) {
+                const name = await fetchProfileName(data.session.user.id);
+                if (name) {
+                    currentUser = data.session.user;
+                    currentDisplayName = name;
+                    hideAuthGate();
+                    renderAccountUI();
+                    renderEntryTable();
+                    renderBetSlip();
+                    fetchRanking();
+                    return;
+                }
+            }
+        } catch (e) {
+            console.error("initAccount error", e);
         }
-        renderAccountUI();
+        showAuthGate();
         fetchRanking();
     }
 
-    authForm.addEventListener("submit", (e) => { e.preventDefault(); handleSignIn(); });
-    signUpBtn.addEventListener("click", handleSignUp);
-    signOutBtn.addEventListener("click", handleSignOut);
-
-    if (supabaseClient) {
-        supabaseClient.auth.onAuthStateChange((_event, session) => {
-            const wasLoggedIn = !!currentUser;
-            const nowLoggedIn = !!(session && session.user);
-            if (wasLoggedIn === nowLoggedIn && (!nowLoggedIn || currentUser.id === session.user.id)) return;
-            currentUser = nowLoggedIn ? session.user : null;
-            if (!nowLoggedIn) currentDisplayName = "";
-            renderAccountUI();
-            if (currentRace) { renderEntryTable(); renderBetSlip(); }
-        });
-    }
+    gateSignupBtn.addEventListener("click", handleGateSignup);
+    gateLoginBtn.addEventListener("click", handleGateLogin);
+    gatePassword.addEventListener("keydown", (e) => { if (e.key === "Enter") handleGateLogin(); });
+    gateUserId.addEventListener("keydown", (e) => { if (e.key === "Enter") gatePassword.focus(); });
+    renameBtn.addEventListener("click", handleRenameClick);
+    signOutBtn.addEventListener("click", handleSwitchPerson);
 
     /* =========================================================
        18. 初期化・全体レンダリング
