@@ -248,16 +248,73 @@ body {
     outline-offset: 1px;
 }
 
-.auth-gate-btn-row {
-    display: flex;
-    gap: 10px;
+.gate-password-wrapper {
+    position: relative;
+    margin-bottom: 12px;
+}
+
+.gate-password-wrapper input[type=password],
+.gate-password-wrapper input[type=text] {
+    width: 100%;
+    background: var(--board);
+    border: 1px solid var(--brass);
+    color: var(--board-digit);
+    font-family: 'Roboto Mono', monospace;
+    font-size: 16px;
+    padding: 12px 66px 12px 14px;
+    border-radius: 5px;
+    margin-bottom: 0;
+}
+
+.gate-password-wrapper input:focus {
+    outline: 2px solid var(--brass-bright);
+    outline-offset: 1px;
+}
+
+.gate-toggle-pw-btn {
+    position: absolute;
+    right: 6px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: rgba(241, 231, 208, .1);
+    border: 1px solid rgba(241, 231, 208, .25);
+    border-radius: 4px;
+    padding: 6px 10px;
+    font-family: 'Oswald', sans-serif;
+    font-size: 10px;
+    letter-spacing: .04em;
+    color: var(--parchment-dim);
+    cursor: pointer;
+}
+
+.gate-toggle-pw-btn:hover {
+    color: var(--parchment);
+    border-color: var(--parchment-dim);
+}
+
+.auth-gate-card button.primary {
+    width: 100%;
+    padding: 13px 22px;
+    font-size: 14px;
     margin-top: 4px;
 }
 
-.auth-gate-btn-row button {
-    flex: 1;
-    padding: 12px 14px;
-    font-size: 13px;
+.gate-link-btn {
+    display: block;
+    width: 100%;
+    background: none;
+    border: none;
+    padding: 10px 0 0;
+    font-family: 'Oswald', sans-serif;
+    font-size: 12px;
+    letter-spacing: .03em;
+    color: var(--parchment-dim);
+    text-decoration: underline;
+    cursor: pointer;
+}
+
+.gate-link-btn:hover {
+    color: var(--brass-bright);
 }
 
 .auth-gate-status {

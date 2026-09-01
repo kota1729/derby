@@ -137,8 +137,10 @@
     const authGateEl = $("authGate");
     const gateUserId = $("gateUserId");
     const gatePassword = $("gatePassword");
-    const gateLoginBtn = $("gateLoginBtn");
-    const gateSignupBtn = $("gateSignupBtn");
+    const gateMainBtn = $("gateMainBtn");
+    const gateSwitchModeBtn = $("gateSwitchModeBtn");
+    const gateTogglePw = $("gateTogglePw");
+    const gateModeDescEl = $("gateModeDesc");
     const authGateStatusEl = $("authGateStatus");
     const rankingBodyEl = $("rankingBody");
     const rankingMonthLabelEl = $("rankingMonthLabel");
@@ -1169,12 +1171,41 @@
        17. アカウント(Supabase匿名認証+表示名)・月間ランキング
        ========================================================= */
 
+    let gateMode = "login"; // "login" | "signup"
+
+    function updateGateModeUI() {
+        if (gateMode === "login") {
+            gateMainBtn.textContent = "ログイン";
+            gateSwitchModeBtn.textContent = "初めての方はこちら(新規登録)";
+            gateModeDescEl.innerHTML = "ユーザーIDとパスワードでログインしてください。<br>メールアドレスは不要です。";
+        } else {
+            gateMainBtn.textContent = "新規登録";
+            gateSwitchModeBtn.textContent = "すでにアカウントをお持ちの方はこちら(ログイン)";
+            gateModeDescEl.innerHTML = "ユーザーIDとパスワードを決めてください。<br>メールアドレスは不要です。";
+        }
+        authGateStatusEl.textContent = "";
+    }
+
+    function toggleGateMode() {
+        gateMode = gateMode === "login" ? "signup" : "login";
+        updateGateModeUI();
+        gateUserId.focus();
+    }
+
+    function handleGateMainAction() {
+        if (gateMode === "login") handleGateLogin();
+        else handleGateSignup();
+    }
+
     function showAuthGate() {
         authGateEl.style.display = "flex";
         accountBox.style.display = "none";
         gateUserId.value = "";
         gatePassword.value = "";
-        authGateStatusEl.textContent = "";
+        gatePassword.type = "password";
+        gateTogglePw.textContent = "表示";
+        gateMode = "login";
+        updateGateModeUI();
         setGateBusy(false);
         setTimeout(() => gateUserId.focus(), 50);
     }
@@ -1185,8 +1216,8 @@
     }
 
     function setGateBusy(busy, msg) {
-        gateLoginBtn.disabled = busy;
-        gateSignupBtn.disabled = busy;
+        gateMainBtn.disabled = busy;
+        gateSwitchModeBtn.disabled = busy;
         if (msg !== undefined) authGateStatusEl.textContent = msg;
     }
 
@@ -1420,10 +1451,15 @@
         fetchRanking();
     }
 
-    gateSignupBtn.addEventListener("click", handleGateSignup);
-    gateLoginBtn.addEventListener("click", handleGateLogin);
-    gatePassword.addEventListener("keydown", (e) => { if (e.key === "Enter") handleGateLogin(); });
+    gateMainBtn.addEventListener("click", handleGateMainAction);
+    gateSwitchModeBtn.addEventListener("click", toggleGateMode);
+    gatePassword.addEventListener("keydown", (e) => { if (e.key === "Enter") handleGateMainAction(); });
     gateUserId.addEventListener("keydown", (e) => { if (e.key === "Enter") gatePassword.focus(); });
+    gateTogglePw.addEventListener("click", () => {
+        const showing = gatePassword.type === "text";
+        gatePassword.type = showing ? "password" : "text";
+        gateTogglePw.textContent = showing ? "表示" : "隠す";
+    });
     renameBtn.addEventListener("click", handleRenameClick);
     signOutBtn.addEventListener("click", handleSwitchPerson);
 

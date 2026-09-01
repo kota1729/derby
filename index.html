@@ -21,15 +21,16 @@
         <div class="auth-gate-card">
             <div class="auth-gate-logo">🏇</div>
             <h2>模擬Web投票へようこそ</h2>
-            <p>ユーザーIDとパスワードを決めてください。<br>メールアドレスは不要です。</p>
+            <p id="gateModeDesc">ユーザーIDとパスワードでログインしてください。<br>メールアドレスは不要です。</p>
             <input type="text" id="gateUserId" placeholder="ユーザーID(英数字とアンダースコア 3〜20文字)" maxlength="20"
                 autocomplete="username">
-            <input type="password" id="gatePassword" placeholder="パスワード(6文字以上)" autocomplete="current-password"
-                minlength="6">
-            <div class="auth-gate-btn-row">
-                <button class="ghost" id="gateLoginBtn">ログイン</button>
-                <button class="primary" id="gateSignupBtn">新規登録</button>
+            <div class="gate-password-wrapper">
+                <input type="password" id="gatePassword" placeholder="パスワード(6文字以上)" autocomplete="current-password"
+                    minlength="6">
+                <button type="button" class="gate-toggle-pw-btn" id="gateTogglePw">表示</button>
             </div>
+            <button class="primary" id="gateMainBtn">ログイン</button>
+            <button type="button" class="gate-link-btn" id="gateSwitchModeBtn">初めての方はこちら(新規登録)</button>
             <div class="auth-gate-status" id="authGateStatus"></div>
             <div class="auth-gate-note">
                 ※ このユーザーID・パスワードがあれば、どの端末・どのブラウザからでも同じ記録に入れます。
