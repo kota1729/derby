@@ -18,9 +18,12 @@
 
     // ユーザーID+パスワード方式(メールアドレス不要)のための設定。
     // Supabase Authは内部的にメールアドレス形式を要求するため、
-    // ユーザーIDを「実在しないダミードメイン(.invalidはRFC2606で予約された特殊用途ドメイン)」
-    // と組み合わせた疑似メールアドレスとして扱う。画面上にメールは一切表示されない。
-    const USERNAME_EMAIL_DOMAIN = "@users.invalid";
+    // ユーザーIDを架空のダミードメインと組み合わせた疑似メールアドレスとして扱う。
+    // 画面上にメールは一切表示されない。
+    // 注: 当初「.invalid」(RFC2606予約ドメイン)を使っていたが、Supabase側のメール形式
+    // チェックが実在TLDかどうかを検証しており弾かれるため、実在TLD(.com)を使った
+    // 架空サブドメインに変更している(実際にメールが送信されることはない)。
+    const USERNAME_EMAIL_DOMAIN = "@users.derby-sim-noemail.com";
     const USERNAME_PATTERN = /^[A-Za-z0-9_]{3,20}$/;
     function usernameToEmail(username) {
         return username.toLowerCase() + USERNAME_EMAIL_DOMAIN;
@@ -101,6 +104,7 @@
     let selectedArchiveRaceNo = null;
     let currentUser = null;      // Supabaseにログイン中のユーザー(未ログインならnull)
     let currentDisplayName = ""; // ログイン中の表示名
+    let currentIsAdmin = false;  // ログイン中のユーザーが管理者かどうか
     let raceAnimInterval = null;
 
     /* =========================================================
@@ -141,9 +145,17 @@
     const gateSwitchModeBtn = $("gateSwitchModeBtn");
     const gateTogglePw = $("gateTogglePw");
     const gateModeDescEl = $("gateModeDesc");
+    const gateRulesEl = $("gateRules");
+    const ruleUserIdEl = $("ruleUserId");
+    const rulePasswordEl = $("rulePassword");
     const authGateStatusEl = $("authGateStatus");
     const rankingBodyEl = $("rankingBody");
     const rankingMonthLabelEl = $("rankingMonthLabel");
+    const openAdminPanelBtn = $("openAdminPanelBtn");
+    const closeAdminPanelBtn = $("closeAdminPanelBtn");
+    const adminPanelOverlayEl = $("adminPanelOverlay");
+    const adminPanelStatusEl = $("adminPanelStatus");
+    const adminUsersBodyEl = $("adminUsersBody");
 
     /* =========================================================
        3. ユーティリティ(決定論的な乱数・時刻表示)
@@ -1173,17 +1185,34 @@
 
     let gateMode = "login"; // "login" | "signup"
 
+    function updateGateRulesUI() {
+        const username = gateUserId.value.trim();
+        const password = gatePassword.value;
+        const userValid = USERNAME_PATTERN.test(username);
+        const pwValid = password.length >= 6;
+        ruleUserIdEl.classList.toggle("valid", userValid);
+        rulePasswordEl.classList.toggle("valid", pwValid);
+        if (gateMode === "signup") {
+            gateMainBtn.disabled = !(userValid && pwValid);
+        } else {
+            gateMainBtn.disabled = false;
+        }
+    }
+
     function updateGateModeUI() {
         if (gateMode === "login") {
             gateMainBtn.textContent = "ログイン";
-            gateSwitchModeBtn.textContent = "初めての方はこちら(新規登録)";
+            gateSwitchModeBtn.textContent = "新規登録はこちら";
             gateModeDescEl.innerHTML = "ユーザーIDとパスワードでログインしてください。<br>メールアドレスは不要です。";
+            gateRulesEl.style.display = "none";
         } else {
             gateMainBtn.textContent = "新規登録";
-            gateSwitchModeBtn.textContent = "すでにアカウントをお持ちの方はこちら(ログイン)";
+            gateSwitchModeBtn.textContent = "ログインはこちら";
             gateModeDescEl.innerHTML = "ユーザーIDとパスワードを決めてください。<br>メールアドレスは不要です。";
+            gateRulesEl.style.display = "block";
         }
         authGateStatusEl.textContent = "";
+        updateGateRulesUI();
     }
 
     function toggleGateMode() {
@@ -1223,17 +1252,18 @@
 
     function renderAccountUI() {
         accountNameEl.textContent = currentDisplayName || "プレイヤー";
+        openAdminPanelBtn.style.display = currentIsAdmin ? "inline-block" : "none";
     }
 
     // profilesから表示名だけを取得する(無ければnull)
-    async function fetchProfileName(userId) {
+    async function fetchProfile(userId) {
         const { data, error } = await supabaseClient
             .from("profiles")
-            .select("display_name")
+            .select("display_name, is_admin, is_banned")
             .eq("id", userId)
             .maybeSingle();
         if (error || !data) return null;
-        return data.display_name || null;
+        return data;
     }
 
     function finishGateSuccess() {
@@ -1314,8 +1344,16 @@
                 setGateBusy(false);
                 return;
             }
+            const profile = await fetchProfile(data.user.id);
+            if (profile && profile.is_banned) {
+                await supabaseClient.auth.signOut();
+                authGateStatusEl.textContent = "このアカウントは停止されています。";
+                setGateBusy(false);
+                return;
+            }
             currentUser = data.user;
-            currentDisplayName = (await fetchProfileName(data.user.id)) || username;
+            currentDisplayName = (profile && profile.display_name) || username;
+            currentIsAdmin = !!(profile && profile.is_admin);
             finishGateSuccess();
         } catch (e) {
             authGateStatusEl.textContent = "エラー: " + String(e);
@@ -1329,6 +1367,7 @@
         if (supabaseClient) await supabaseClient.auth.signOut();
         currentUser = null;
         currentDisplayName = "";
+        currentIsAdmin = false;
         currentSelection = [];
         renderEntryTable();
         renderBetSlip();
@@ -1432,10 +1471,18 @@
         try {
             const { data } = await supabaseClient.auth.getSession();
             if (data && data.session && data.session.user) {
-                const name = await fetchProfileName(data.session.user.id);
-                if (name) {
+                const profile = await fetchProfile(data.session.user.id);
+                if (profile && profile.is_banned) {
+                    await supabaseClient.auth.signOut();
+                    showAuthGate();
+                    authGateStatusEl.textContent = "このアカウントは停止されています。";
+                    fetchRanking();
+                    return;
+                }
+                if (profile && profile.display_name) {
                     currentUser = data.session.user;
-                    currentDisplayName = name;
+                    currentDisplayName = profile.display_name;
+                    currentIsAdmin = !!profile.is_admin;
                     hideAuthGate();
                     renderAccountUI();
                     renderEntryTable();
@@ -1460,8 +1507,139 @@
         gatePassword.type = showing ? "password" : "text";
         gateTogglePw.textContent = showing ? "表示" : "隠す";
     });
+    gateUserId.addEventListener("input", updateGateRulesUI);
+    gatePassword.addEventListener("input", updateGateRulesUI);
     renameBtn.addEventListener("click", handleRenameClick);
     signOutBtn.addEventListener("click", handleSwitchPerson);
+
+    /* =========================================================
+       17.5 管理者パネル
+       ========================================================= */
+
+    function formatAdminDate(iso) {
+        if (!iso) return "-";
+        return new Date(iso).toLocaleDateString('ja-JP', { timeZone: 'Asia/Tokyo', year: 'numeric', month: '2-digit', day: '2-digit' });
+    }
+
+    async function openAdminPanel() {
+        if (!currentIsAdmin) return;
+        adminPanelOverlayEl.style.display = "flex";
+        await loadAdminUsers();
+    }
+
+    function closeAdminPanel() {
+        adminPanelOverlayEl.style.display = "none";
+    }
+
+    async function loadAdminUsers() {
+        adminPanelStatusEl.textContent = "読み込み中…";
+        adminUsersBodyEl.innerHTML = `<tr class="empty-row"><td colspan="6">読み込み中…</td></tr>`;
+        const { data, error } = await supabaseClient.rpc("admin_all_users_stats");
+        if (error) {
+            adminPanelStatusEl.textContent = "";
+            adminUsersBodyEl.innerHTML = `<tr class="empty-row"><td colspan="6">取得に失敗しました: ${error.message}</td></tr>`;
+            return;
+        }
+        adminPanelStatusEl.textContent = `全 ${data.length} 人`;
+        renderAdminUsersTable(data);
+    }
+
+    function renderAdminUsersTable(users) {
+        if (!users || users.length === 0) {
+            adminUsersBodyEl.innerHTML = `<tr class="empty-row"><td colspan="6">ユーザーがいません</td></tr>`;
+            return;
+        }
+        adminUsersBodyEl.innerHTML = users.map(u => {
+            const badges = [
+                u.is_admin ? `<span class="admin-status-badge admin">管理者</span>` : "",
+                u.is_banned ? `<span class="admin-status-badge banned">停止中</span>` : `<span class="admin-status-badge normal">通常</span>`,
+            ].join("");
+            const isSelf = currentUser && u.user_id === currentUser.id;
+            return `<tr>
+        <td>${u.display_name}</td>
+        <td>${u.balance}</td>
+        <td>${u.bet_count}</td>
+        <td>${formatAdminDate(u.created_at)}</td>
+        <td>${badges}</td>
+        <td>
+          <div class="admin-row-actions">
+            <button class="admin-action-btn" data-action="adjust" data-id="${u.user_id}" data-name="${u.display_name}">チップ調整</button>
+            ${isSelf ? "" : `<button class="admin-action-btn" data-action="ban" data-id="${u.user_id}" data-name="${u.display_name}" data-banned="${u.is_banned}">${u.is_banned ? "停止解除" : "停止"}</button>`}
+            ${isSelf ? "" : `<button class="admin-action-btn danger" data-action="delete" data-id="${u.user_id}" data-name="${u.display_name}">削除</button>`}
+          </div>
+        </td>
+      </tr>`;
+        }).join("");
+
+        adminUsersBodyEl.querySelectorAll(".admin-action-btn").forEach(btn => {
+            btn.addEventListener("click", () => {
+                const action = btn.dataset.action;
+                const targetId = btn.dataset.id;
+                const targetName = btn.dataset.name;
+                if (action === "adjust") handleAdjustChipsClick(targetId, targetName);
+                else if (action === "ban") handleToggleBanClick(targetId, targetName, btn.dataset.banned === "true");
+                else if (action === "delete") handleDeleteUserClick(targetId, targetName);
+            });
+        });
+    }
+
+    async function callAdminFunction(name, body) {
+        return await supabaseClient.functions.invoke(name, { body });
+    }
+
+    async function handleAdjustChipsClick(targetId, targetName) {
+        const raw = window.prompt(`${targetName} さんのチップを調整します。\n増やす場合は正の数、減らす場合は負の数を入力してください(例: 500 / -300)`, "");
+        if (raw === null) return;
+        const amount = parseInt(raw, 10);
+        if (!Number.isFinite(amount) || amount === 0) {
+            alert("有効な数値(0以外の整数)を入力してください。");
+            return;
+        }
+        const reason = window.prompt("理由(任意・省略可)", "") || "";
+        adminPanelStatusEl.textContent = "処理中…";
+        const { data, error } = await callAdminFunction("admin-adjust-chips", {
+            target_user_id: targetId, amount, reason,
+        });
+        if (error || (data && data.error)) {
+            adminPanelStatusEl.textContent = "エラー: " + (error ? error.message : data.error);
+            return;
+        }
+        await loadAdminUsers();
+    }
+
+    async function handleToggleBanClick(targetId, targetName, currentlyBanned) {
+        const action = currentlyBanned ? "unban" : "ban";
+        const confirmMsg = currentlyBanned
+            ? `${targetName} さんの停止を解除しますか?`
+            : `${targetName} さんを停止しますか?(ログイン・投票ができなくなります)`;
+        if (!window.confirm(confirmMsg)) return;
+        adminPanelStatusEl.textContent = "処理中…";
+        const { data, error } = await callAdminFunction("admin-manage-user", {
+            target_user_id: targetId, action,
+        });
+        if (error || (data && data.error)) {
+            adminPanelStatusEl.textContent = "エラー: " + (error ? error.message : data.error);
+            return;
+        }
+        await loadAdminUsers();
+    }
+
+    async function handleDeleteUserClick(targetId, targetName) {
+        if (!window.confirm(`${targetName} さんを完全に削除します。この操作は取り消せません。本当によろしいですか?`)) return;
+        if (!window.confirm(`最終確認: 本当に ${targetName} さんを削除しますか?`)) return;
+        adminPanelStatusEl.textContent = "処理中…";
+        const { data, error } = await callAdminFunction("admin-manage-user", {
+            target_user_id: targetId, action: "delete",
+        });
+        if (error || (data && data.error)) {
+            adminPanelStatusEl.textContent = "エラー: " + (error ? error.message : data.error);
+            return;
+        }
+        await loadAdminUsers();
+    }
+
+    openAdminPanelBtn.addEventListener("click", openAdminPanel);
+    closeAdminPanelBtn.addEventListener("click", closeAdminPanel);
 
     /* =========================================================
        18. 初期化・全体レンダリング
