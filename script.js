@@ -18,15 +18,17 @@
 
     // ユーザーID+パスワード方式(メールアドレス不要)のための設定。
     // Supabase Authは内部的にメールアドレス形式を要求するため、
-    // ユーザーIDを架空のダミードメインと組み合わせた疑似メールアドレスとして扱う。
-    // 画面上にメールは一切表示されない。
-    // 注: 当初「.invalid」(RFC2606予約ドメイン)を使っていたが、Supabase側のメール形式
-    // チェックが実在TLDかどうかを検証しており弾かれるため、実在TLD(.com)を使った
-    // 架空サブドメインに変更している(実際にメールが送信されることはない)。
-    const USERNAME_EMAIL_DOMAIN = "@users.derby-sim-noemail.com";
+    // ユーザーIDを架空のメールアドレスと組み合わせて扱う。画面上にメールは一切表示されない。
+    // 注: 当初「.invalid」や架空の自作ドメインを使っていたが、Supabase側のメール検証が
+    // MXレコード(そのドメインが実際にメールを受信できるか)をチェックしており、
+    // 存在しないドメインは "invalid" として弾かれることが判明した。
+    // mailinator.com は実際にMXレコードを持つ実在のメールドメインで、匿名の使い捨てアドレス用途
+    // として広く使われているため、ここではダミーメール生成先として採用している
+    // (実際にメールが送信されることはなく、確認メールの送信もオフの想定)。
+    const USERNAME_EMAIL_DOMAIN = "@mailinator.com";
     const USERNAME_PATTERN = /^[A-Za-z0-9_]{3,20}$/;
     function usernameToEmail(username) {
-        return username.toLowerCase() + USERNAME_EMAIL_DOMAIN;
+        return "derbysim_" + username.toLowerCase() + USERNAME_EMAIL_DOMAIN;
     }
 
     /* =========================================================
